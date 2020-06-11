@@ -1,0 +1,23 @@
+{
+    "name": "ziffmedia/laravel-mysql-snapshots",
+    "description": "A set of commands that will create and load MySQL snapshots with the mysql-client command line tools",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ralph Schindler",
+            "email": "ralph.schindler@ziffmedia.com"
+        }
+    ],
+    "require": {
+        "php": ">7.0",
+        "laravel/framework": "^6.0|^7.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MysqlSnapshotsServiceProvider"
+            ]
+        }
+    }
+}
