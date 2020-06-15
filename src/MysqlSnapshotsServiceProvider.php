@@ -16,5 +16,13 @@ class MysqlSnapshotsServiceProvider extends ServiceProvider
     public function register()
     {
         $this->mergeConfigFrom(__DIR__.'/../config/mysql-snapshots.php', 'mysql-snapshots');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                Commands\CreateCommand::class,
+                Commands\ListCommand::class,
+                Commands\LoadCommand::class
+            ]);
+        }
     }
 }

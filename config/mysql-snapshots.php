@@ -10,8 +10,8 @@ return [
 
     'plans' => [
         'daily' => [
-            'connection'        => 'default',
-            'file_template'     => 'mysql-snapshot-{plan_name}-{date|YMDHi}.{extension}',
+            'connection'        => null,
+            'file_template'     => 'mysql-snapshot-{plan_name}-{date|YmdHi}',
             'mysqldump_options' => '--single-transaction',
             // 'ignore_tables'     => '',
             'keep_last'         => 1,

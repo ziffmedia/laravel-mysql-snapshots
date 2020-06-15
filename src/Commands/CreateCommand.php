@@ -1,9 +1,10 @@
 <?php
 
-namespace ZiffMedia\LaravelMysqlSnapshots;
+namespace ZiffMedia\LaravelMysqlSnapshots\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class CreateCommand extends Command
 {
@@ -12,7 +13,7 @@ class CreateCommand extends Command
 
     public function handle()
     {
-        $plan = $this->argument('plan');
+        $plan = $this->option('plan');
 
         $snapshotPlans = SnapshotPlan::all()->when($plan, function (Collection $snapshotPlans) use ($plan) {
             return $snapshotPlans->filter(function ($snapshotPlan) use ($plan) {
