@@ -2,7 +2,6 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots;
 
-use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 
 class SnapshotPlan
@@ -16,7 +15,7 @@ class SnapshotPlan
     public $environmentLocks = [];
 
     /**
-     * @return \Illuminate\Support\Collection|Snapshot[]
+     * @return \Illuminate\Support\Collection|SnapshotPlan[]
      */
     public static function all()
     {
@@ -29,27 +28,39 @@ class SnapshotPlan
     {
         $this->name = $name;
 
-        $this->connection = $config['connection']
+        $this->connection = isset($config['connection'])
             ? $config['connection']
             : config('database.default');
 
         $this->fileTemplate = $config['file_template'] ?? 'mysql-snapshots-{date|YMDHi}';
 
-        if (strpos($this->fileTemplate, '.')) {
-            throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan cannot contain a '.'");
-        }
-
-        if (strpos($this->fileTemplate, '{')) {
-            throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan currently does not support replacements");
-        }
+        // if (strpos($this->fileTemplate, '.')) {
+        //     throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan cannot contain a '.'");
+        // }
+        //
+        // if (strpos($this->fileTemplate, '{')) {
+        //     throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan currently does not support replacements");
+        // }
 
         $this->mysqldumpOptions = $config['mysqldump_options'] ?? '';
 
         // @todo
         // $this->ignoreTables = $config['ignore_tables'] ?? '';
 
-        $this->keep = $config['keep'] ?? 1;
+        $this->keep = (int)($config['keep'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
+    }
+
+    public function getSettings()
+    {
+        return [
+            'name'              => $this->name,
+            'connection'        => $this->connection,
+            'file_template'     => $this->fileTemplate,
+            'mysqldump_options' => $this->mysqldumpOptions,
+            'keep'              => $this->keep,
+            'environment_locks' => $this->environmentLocks
+        ];
     }
 
     public function canCreate()
@@ -66,45 +77,51 @@ class SnapshotPlan
     {
         $fileName = $this->createFileName();
 
+        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
         $localFilePath = config('mysql-snapshots.filesystem.local_path');
 
         $mysqldumpUtil = config('mysql-snapshots.utilities.mysqldump');
 
-        $localFs = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
-
-        if (!$localFs->exists($localFilePath)) {
-            $localFs->makeDirectory($localFilePath);
+        if (!$localDisk->exists($localFilePath)) {
+            $localDisk->makeDirectory($localFilePath);
         }
 
-        $mysqlDumpFile = $localFs->path("$localFilePath/$fileName");
+        $localFileFullPath = $localDisk->path("{$localFilePath}/{$fileName}");
 
         $this->runCommandWithCredentials(
-            "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {database} > {$mysqlDumpFile}"
+            "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {database} > $localFileFullPath"
         );
 
         $gzipUtil = config('mysql-snapshots.utilities.gzip');
 
-        exec("$gzipUtil -f $mysqlDumpFile");
+        if ($gzipUtil) {
+            exec("$gzipUtil -f $localFileFullPath");
 
-        // tack on .gz as that is what the above command does
-        $fileName = $fileName . '.gz';
-        $mysqlDumpFile = $mysqlDumpFile . '.gz';
+            // tack on .gz as that is what the above command does
+            $fileName .= '.gz';
+            $localFileFullPath .= '.gz';
+        }
 
         $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
 
-        $archiveFs = $this->getArchiveFilesystem();
+        // move to archive
+        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
 
-        $archiveFs->put(
-            "$archiveFilePath/$fileName",
-            fopen($mysqlDumpFile, 'r+')
-        );
+        $archiveFile = "$archiveFilePath/$fileName";
 
-        unlink($mysqlDumpFile);
+        $archiveDisk->put($archiveFile, fopen($localFileFullPath, 'r+'));
+
+        $localDisk->delete($localFileFullPath);
+
+        return tap(new Snapshot, function (Snapshot $snapshot) use ($archiveDisk, $archiveFile) {
+            $snapshot->archiveDisk = $archiveDisk;
+            $snapshot->archiveFile = $archiveFile;
+        });
     }
 
     public function cleanup(): void
     {
-        // $files = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'))->allFiles(config('mysql-snapshots.filesystem.archive_path'));
+        $files = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'))->allFiles(config('mysql-snapshots.filesystem.archive_path'));
     }
 
     public function load(): void
@@ -187,7 +204,6 @@ class SnapshotPlan
 
         throw new \RuntimeException("$archiveDiskName is not a valid filesystem disk");
     }
-
     protected function getDatabaseConnectionConfig()
     {
         $databaseConnectionConfig = config('database.connections.' . $this->connection);
@@ -228,12 +244,20 @@ class SnapshotPlan
 
     protected function createFileName()
     {
+        $hasExtension = strpos($this->fileTemplate, '{extension}') !== false;
+
         // @todo make this smarter
-        return str_replace(
-            ['{date|YmdHi}', '{plan_name}'],
-            [date('YmdHi'), $this->name],
+        $fileName = str_replace(
+            ['{date|YmdHi}', '{date|YmdH}', '{date|Ymd}', '{date}', '{plan_name}', '{extension}'],
+            [date('YmdHi'), date('YmdH'), date('Ymd'), date('Ymd'), $this->name, 'sql'],
             $this->fileTemplate
-        ) . '.sql';
+        );
+
+        if ($hasExtension) {
+            return $fileName;
+        }
+
+        return $fileName . '.sql';
     }
 }
 
