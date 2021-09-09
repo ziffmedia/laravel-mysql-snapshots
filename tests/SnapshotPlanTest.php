@@ -85,6 +85,11 @@ class SnapshotPlanTest extends TestCase
         $this->assertFalse($plan->canLoad());
     }
 
+    public function testLoad()
+    {
+
+    }
+
     public function testCreate()
     {
         $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());

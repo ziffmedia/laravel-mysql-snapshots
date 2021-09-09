@@ -65,12 +65,12 @@ class SnapshotPlan
 
     public function canCreate()
     {
-        return app()->environment($this->environmentLocks['create']);
+        return app()->environment($this->environmentLocks['create'] ?? 'production');
     }
 
     public function canLoad()
     {
-        return app()->environment($this->environmentLocks['load']);
+        return app()->environment($this->environmentLocks['load'] ?? 'local');
     }
 
     public function create()
@@ -105,7 +105,7 @@ class SnapshotPlan
         $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
 
         // move to archive
-        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+        $archiveDisk = $this->getArchiveDisk();
 
         $archiveFile = "$archiveFilePath/$fileName";
 
@@ -113,15 +113,16 @@ class SnapshotPlan
 
         $localDisk->delete($localFileFullPath);
 
-        return tap(new Snapshot, function (Snapshot $snapshot) use ($archiveDisk, $archiveFile) {
-            $snapshot->archiveDisk = $archiveDisk;
-            $snapshot->archiveFile = $archiveFile;
-        });
+        $snapshot = new Snapshot;
+        $snapshot->archiveDisk = $archiveDisk;
+        $snapshot->archiveFile = $archiveFile;
+
+        return $snapshot;
     }
 
     public function cleanup(): void
     {
-        $files = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'))->allFiles(config('mysql-snapshots.filesystem.archive_path'));
+        $files = $this->getArchiveDisk()->allFiles(config('mysql-snapshots.filesystem.archive_path'));
     }
 
     public function load(): void
@@ -131,7 +132,7 @@ class SnapshotPlan
         // copy file down if necessary
         $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
 
-        $archiveFs = $this->getArchiveFilesystem();
+        $archiveDisk = $this->getArchiveDisk();
 
         $localFilePath = config('mysql-snapshots.filesystem.local_path');
 
@@ -139,17 +140,17 @@ class SnapshotPlan
          * @todo this is where caching and content checking should be taking place
          */
 
-        $localFs = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
+        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
 
-        if (!$localFs->exists($localFilePath)) {
-            $localFs->makeDirectory($localFilePath);
+        if (!$localDisk->exists($localFilePath)) {
+            $localDisk->makeDirectory($localFilePath);
         }
 
-        $mysqlDumpFile = $localFs->path("$localFilePath/$fileName");
+        $mysqlDumpFile = $localDisk->path("$localFilePath/$fileName");
 
-        $localFs->put(
+        $localDisk->put(
             "$localFilePath/$fileName",
-            $archiveFs->get("$archiveFilePath/$fileName")
+            $archiveDisk->get("$archiveFilePath/$fileName")
         );
 
         $zcatUtil = config('mysql-snapshots.utilities.zcat');
@@ -163,11 +164,11 @@ class SnapshotPlan
 
     public function list()
     {
-        $archiveFs = $this->getArchiveFilesystem();
+        $archiveDisk = $this->getArchiveDisk();
 
         $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
 
-        return collect($archiveFs->allFiles())
+        return collect($archiveDisk->allFiles($archiveFilePath))
             ->map(function ($file) use ($archiveFilePath) {
                 if (strpos($file, $archiveFilePath) !== 0) {
                     return false;
@@ -187,10 +188,7 @@ class SnapshotPlan
             ->values();
     }
 
-    /**
-     * @return \Illuminate\Contracts\Filesystem\Filesystem
-     */
-    protected function getArchiveFilesystem()
+    protected function getArchiveDisk()
     {
         $archiveDiskName = config('mysql-snapshots.filesystem.archive_disk');
 
@@ -204,12 +202,13 @@ class SnapshotPlan
 
         throw new \RuntimeException("$archiveDiskName is not a valid filesystem disk");
     }
+
     protected function getDatabaseConnectionConfig()
     {
         $databaseConnectionConfig = config('database.connections.' . $this->connection);
 
         if (!$databaseConnectionConfig) {
-            throw new \RuntimeException('A database connection for name ' . $this->connection . ' does not exist');
+            throw new \RuntimeException("A database connection for name {$this->connection} does not exist");
         }
 
         return $databaseConnectionConfig;
@@ -246,7 +245,6 @@ class SnapshotPlan
     {
         $hasExtension = strpos($this->fileTemplate, '{extension}') !== false;
 
-        // @todo make this smarter
         $fileName = str_replace(
             ['{date|YmdHi}', '{date|YmdH}', '{date|Ymd}', '{date}', '{plan_name}', '{extension}'],
             [date('YmdHi'), date('YmdH'), date('Ymd'), date('Ymd'), $this->name, 'sql'],
