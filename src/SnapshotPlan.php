@@ -2,26 +2,84 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots;
 
+use Carbon\Carbon;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use RuntimeException;
 
 class SnapshotPlan
 {
-    public $name;
-    public $connection;
-    public $fileTemplate;
-    public $mysqldumpOptions;
-    public $ignoreTables;
-    public $keep = 1;
-    public $environmentLocks = [];
+    public string $name;
+    public string $connection;
+    public string $fileTemplate;
+    public string $mysqldumpOptions = '';
+    public array $schemaOnlyTables = [];
+    public array $ignoreTables = [];
+    public int $keepLast = 1;
+    public array $environmentLocks = [];
+    /** @var Collection|Snapshot[] */
+    public readonly Collection $snapshots;
+    public readonly FilesystemAdapter $archiveDisk;
+    public readonly string $archivePath;
+    public readonly FilesystemAdapter $localDisk;
+    public readonly string $localPath;
+    protected array $fileTemplateParts;
+    public static array $unacceptedFiles = [];
 
     /**
-     * @return \Illuminate\Support\Collection|SnapshotPlan[]
+     * @return Collection|SnapshotPlan[]
      */
     public static function all()
     {
-        return collect(config('mysql-snapshots.plans'))->map(function ($config, $name) {
-            return new SnapshotPlan($name, $config);
-        });
+        $snapshotPlanConfigs = config('mysql-snapshots.plans', []);
+
+        if (count($snapshotPlanConfigs) === 0) {
+            throw new \RuntimeException('mysql-snapshots.plans does not contain any configured snapshot plans');
+        }
+
+        if (isset($snapshotPlanConfigs['cached'])) {
+            throw new RuntimeException('You cannot use "cached" as a plan name in your mysql-snapshots.php config');
+        }
+
+        /** @var SnapshotPlan[] $snapshotPlans */
+        $snapshotPlans = collect($snapshotPlanConfigs)->map(fn ($config, $name) => new SnapshotPlan($name, $config));
+
+        $archiveDisk = config('mysql-snapshots.filesystem.archive_disk') === 'cloud'
+            ? Storage::cloud()
+            : Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+
+        $archivePath = config('mysql-snapshots.filesystem.archive_path');
+
+        foreach ($archiveDisk->allFiles($archivePath) as $archiveFile) {
+            $accepted = false;
+
+            $archiveFileName = Str::substr($archiveFile, strlen($archivePath) + 1);
+
+            foreach ($snapshotPlans as $snapshotPlan) {
+                $accepted = $snapshotPlan->accept($archiveFileName);
+
+                if ($accepted) {
+                    break;
+                }
+            }
+
+            if ($accepted === false) {
+                static::$unacceptedFiles[] = $archiveFile;
+            }
+        }
+
+        // re-order the snapshots from latest to earliest
+        foreach ($snapshotPlans as $snapshotPlan) {
+            $snapshotPlan->snapshots
+                ->shift(PHP_INT_MAX) // shift returns new collection here
+                ->sort(fn (Snapshot $a, Snapshot $b) => $b->date->gte($a->date))
+                ->each(fn (Snapshot $snapshot) => $snapshotPlan->snapshots->push($snapshot));
+        }
+
+        return $snapshotPlans;
     }
 
     public function __construct(string $name, array $config)
@@ -32,23 +90,44 @@ class SnapshotPlan
             ? $config['connection']
             : config('database.default');
 
-        $this->fileTemplate = $config['file_template'] ?? 'mysql-snapshots-{date|YMDHi}';
+        $this->fileTemplate = $config['file_template'] ?? 'mysql-snapshots-{date}';
 
-        // if (strpos($this->fileTemplate, '.')) {
-        //     throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan cannot contain a '.'");
-        // }
-        //
-        // if (strpos($this->fileTemplate, '{')) {
-        //     throw new \InvalidArgumentException("file_template for {$this->name} snapshot plan currently does not support replacements");
-        // }
+        $fileTemplateString = Str::of($this->fileTemplate);
+
+        $this->fileTemplateParts['prefix'] = (string) $fileTemplateString->before('{');
+        $this->fileTemplateParts['postfix'] = (string) $fileTemplateString->after('}');
+        $this->fileTemplateParts['date'] = (string) $fileTemplateString->betweenFirst('{', '}');
+
+        $dateParts = explode(':', $this->fileTemplateParts['date'], 2);
+
+        $this->fileTemplateParts['date_format'] = $dateParts[1] ?? 'Ymd';
+
+        if (str_contains($this->fileTemplateParts['date_format'], 'W')) {
+            throw new InvalidArgumentException('"W" in the date format is not supported as it cannot be used in DateTimeImmutable::createFromDate()');
+        }
+
+        if (!strpos($this->fileTemplate, '{date')) {
+            throw new InvalidArgumentException("file_template for {$this->name} snapshot plan currently does not have a {date} placeholder");
+        }
 
         $this->mysqldumpOptions = $config['mysqldump_options'] ?? '';
 
         // @todo
         // $this->ignoreTables = $config['ignore_tables'] ?? '';
 
-        $this->keep = (int)($config['keep'] ?? 1);
+        $this->keepLast = (int) ($config['keep'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
+
+        $this->snapshots = new Collection;
+
+        $this->archiveDisk = config('mysql-snapshots.filesystem.archive_disk') === 'cloud'
+            ? Storage::cloud()
+            : Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+
+        $this->localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
+
+        $this->archivePath = rtrim(config('mysql-snapshots.filesystem.archive_path'), '/');
+        $this->localPath = rtrim(config('mysql-snapshots.filesystem.local_path'), '/');
     }
 
     public function getSettings()
@@ -73,148 +152,152 @@ class SnapshotPlan
         return app()->environment($this->environmentLocks['load'] ?? 'local');
     }
 
-    public function create()
+    public function create(callable $progressMessagesCallback = null)
     {
-        $fileName = $this->createFileName();
+        $progressMessagesCallback = $progressMessagesCallback ?? fn () => null;
 
-        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
-        $localFilePath = config('mysql-snapshots.filesystem.local_path');
+        $date = Carbon::now();
+        $dateAsTitle = Str::title($date->format($this->fileTemplateParts['date_format']));
+
+        $fileName = $this->fileTemplateParts['prefix'] . $dateAsTitle . $this->fileTemplateParts['postfix'] . '.sql';
 
         $mysqldumpUtil = config('mysql-snapshots.utilities.mysqldump');
 
-        if (!$localDisk->exists($localFilePath)) {
-            $localDisk->makeDirectory($localFilePath);
+        if (!$this->localDisk->exists($this->localPath)) {
+            $this->localDisk->makeDirectory($this->localPath);
         }
 
-        $localFileFullPath = $localDisk->path("{$localFilePath}/{$fileName}");
+        $localFileFullPath = $this->localDisk->path("{$this->localPath}/{$fileName}");
 
-        $this->runCommandWithCredentials(
-            "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {database} > $localFileFullPath"
-        );
+        $ignoreTablesOption = $this->ignoreTables ? implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->ignoreTables)) : '';
+
+        $schemaOnlyIgnoreTablesOption = implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->schemaOnlyTables));
+        $schemaOnlyIncludeTables = implode(' ', $this->schemaOnlyTables);
+
+        // schema and data tables
+        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {$ignoreTablesOption} {$schemaOnlyIgnoreTablesOption} {database} > $localFileFullPath";
+
+        $progressMessagesCallback('Running: ' . $command);
+
+        $this->runCommandWithMysqlCredentials($command);
+
+        if ($schemaOnlyIncludeTables) {
+            $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {$ignoreTablesOption} --no-data {database} {$schemaOnlyIncludeTables} >> $localFileFullPath";
+
+            $progressMessagesCallback('Running: ' . $command);
+
+            $this->runCommandWithMysqlCredentials($command);
+        }
 
         $gzipUtil = config('mysql-snapshots.utilities.gzip');
 
         if ($gzipUtil) {
-            exec("$gzipUtil -f $localFileFullPath");
+            $command = "$gzipUtil -f $localFileFullPath";
+
+            $progressMessagesCallback('Running: ' . $command);
+
+            exec($command);
 
             // tack on .gz as that is what the above command does
             $fileName .= '.gz';
             $localFileFullPath .= '.gz';
         }
 
-        $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
+        $archiveFile = "{$this->archivePath}/$fileName";
 
-        // move to archive
-        $archiveDisk = $this->getArchiveDisk();
+        // store in cloud and remove from local
+        $this->archiveDisk->put($archiveFile, fopen($localFileFullPath, 'r+'));
+        $this->localDisk->delete($localFileFullPath);
 
-        $archiveFile = "$archiveFilePath/$fileName";
+        $snapshot = new Snapshot($fileName, $date, $this);
 
-        $archiveDisk->put($archiveFile, fopen($localFileFullPath, 'r+'));
-
-        $localDisk->delete($localFileFullPath);
-
-        $snapshot = new Snapshot;
-        $snapshot->archiveDisk = $archiveDisk;
-        $snapshot->archiveFile = $archiveFile;
+        $this->snapshots->prepend($snapshot);
 
         return $snapshot;
     }
 
-    public function cleanup(): void
+    public function matchFileAndDate(string $testFileName): false|Carbon
     {
-        $files = $this->getArchiveDisk()->allFiles(config('mysql-snapshots.filesystem.archive_path'));
-    }
+        $fileName = Str::of($testFileName)->before('.');
 
-    public function load(): void
-    {
-        $fileName = $this->list()->first();
-
-        // copy file down if necessary
-        $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
-
-        $archiveDisk = $this->getArchiveDisk();
-
-        $localFilePath = config('mysql-snapshots.filesystem.local_path');
-
-        /**
-         * @todo this is where caching and content checking should be taking place
-         */
-
-        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
-
-        if (!$localDisk->exists($localFilePath)) {
-            $localDisk->makeDirectory($localFilePath);
+        if (($this->fileTemplateParts['prefix'] && !$fileName->startsWith($this->fileTemplateParts['prefix']))
+            || ($this->fileTemplateParts['postfix'] && !$fileName->endsWith($this->fileTemplateParts['postfix']))) {
+            return false;
         }
 
-        $mysqlDumpFile = $localDisk->path("$localFilePath/$fileName");
-
-        $localDisk->put(
-            "$localFilePath/$fileName",
-            $archiveDisk->get("$archiveFilePath/$fileName")
-        );
-
-        $zcatUtil = config('mysql-snapshots.utilities.zcat');
-
-        $mysqlUtil = config('mysql-snapshots.utilities.mysql');
-
-        $this->runCommandWithCredentials(
-            "$zcatUtil $mysqlDumpFile | $mysqlUtil --defaults-extra-file={credentials_file} {database}"
-        );
-    }
-
-    public function list()
-    {
-        $archiveDisk = $this->getArchiveDisk();
-
-        $archiveFilePath = config('mysql-snapshots.filesystem.archive_path');
-
-        return collect($archiveDisk->allFiles($archiveFilePath))
-            ->map(function ($file) use ($archiveFilePath) {
-                if (strpos($file, $archiveFilePath) !== 0) {
-                    return false;
-                }
-
-                $file = substr($file, strlen($archiveFilePath) + 1); // including /
-
-                [$filename, $extension] = explode('.', $file, 2);
-
-                if ($filename == $this->fileTemplate) {
-                    return $file;
-                }
-
-                return false;
-            })
-            ->filter()
-            ->values();
-    }
-
-    protected function getArchiveDisk()
-    {
-        $archiveDiskName = config('mysql-snapshots.filesystem.archive_disk');
-
-        if (config("filesystems.disks.$archiveDiskName")) {
-            return Storage::disk($archiveDiskName);
+        if (($this->fileTemplateParts['prefix'] && !$fileName->startsWith($this->fileTemplateParts['prefix']))
+            || ($this->fileTemplateParts['postfix'] && !$fileName->endsWith($this->fileTemplateParts['postfix']))) {
+            return false;
         }
 
-        if ($archiveDiskName === 'cloud') {
-            return Storage::cloud();
+        if (!$this->fileTemplateParts['postfix']) {
+            $fileDatePart = $fileName->after($this->fileTemplateParts['prefix']);
+        } elseif (!$this->fileTemplateParts['prefix']) {
+            $fileDatePart = $fileName->before($this->fileTemplateParts['postfix']);
+        } else {
+            $fileDatePart = $fileName->betweenFirst($this->fileTemplateParts['prefix'], $this->fileTemplateParts['postfix']);
         }
 
-        throw new \RuntimeException("$archiveDiskName is not a valid filesystem disk");
+        return Carbon::createFromFormat($this->fileTemplateParts['date_format'] . '|', (string) $fileDatePart);
     }
 
-    protected function getDatabaseConnectionConfig()
+    public function accept(string $archiveFileName)
     {
-        $databaseConnectionConfig = config('database.connections.' . $this->connection);
+        $fileDate = $this->matchFileAndDate($archiveFileName);
 
-        if (!$databaseConnectionConfig) {
-            throw new \RuntimeException("A database connection for name {$this->connection} does not exist");
+        if (!$fileDate) {
+            return false;
         }
 
-        return $databaseConnectionConfig;
+        $this->snapshots->push(new Snapshot($archiveFileName, $fileDate, $this));
+
+        return true;
     }
 
-    protected function runCommandWithCredentials($command)
+    public function cleanupCount(): int
+    {
+        $copy = clone $this->snapshots;
+
+        return $copy->splice($this->keepLast)->count();
+    }
+
+    public function cleanup(): int
+    {
+        return $this->snapshots->splice($this->keepLast)
+            ->each(fn (Snapshot $snapshot) => $snapshot->remove())
+            ->count();
+    }
+
+    public function clearCached($keepFileName = null): array
+    {
+        $clearedFiles = [];
+
+        $localFiles = $this->localDisk->allFiles($this->localPath);
+
+        foreach ($localFiles as $localFile) {
+            if (!Str::startsWith($localFile, $this->localPath)) {
+                continue;
+            }
+
+            $localFileName = Str::substr($localFile, strlen($this->localPath) + 1);
+
+            if ($this->matchFileAndDate($localFileName) === false) {
+                continue;
+            }
+
+            if ($keepFileName === $localFileName) {
+                continue;
+            }
+
+            $clearedFiles[] = $localFileName;
+
+            $this->localDisk->delete($localFile);
+        }
+
+        return $clearedFiles;
+    }
+
+    public function runCommandWithMysqlCredentials($command): void
     {
         $dbConfig = $this->getDatabaseConnectionConfig();
 
@@ -241,21 +324,15 @@ class SnapshotPlan
         $disk->delete('mysql-credentials.txt');
     }
 
-    protected function createFileName()
+    protected function getDatabaseConnectionConfig()
     {
-        $hasExtension = strpos($this->fileTemplate, '{extension}') !== false;
+        $databaseConnectionConfig = config('database.connections.' . $this->connection);
 
-        $fileName = str_replace(
-            ['{date|YmdHi}', '{date|YmdH}', '{date|Ymd}', '{date}', '{plan_name}', '{extension}'],
-            [date('YmdHi'), date('YmdH'), date('Ymd'), date('Ymd'), $this->name, 'sql'],
-            $this->fileTemplate
-        );
-
-        if ($hasExtension) {
-            return $fileName;
+        if (!$databaseConnectionConfig) {
+            throw new RuntimeException("A database connection for name {$this->connection} does not exist");
         }
 
-        return $fileName . '.sql';
+        return $databaseConnectionConfig;
     }
 }
 
