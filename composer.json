@@ -10,14 +10,31 @@
         }
     ],
     "require": {
-        "php": ">7.0",
-        "laravel/framework": "^6.0|^7.0"
+        "php": ">=7.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "ZiffMedia\\LaravelMysqlSnapshots\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ZiffMedia\\LaravelMysqlSnapshots\\Tests\\": "tests/"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "ZiffMedia\\LaravelMysqlSnapshots\\": "src/"
+        }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "MysqlSnapshotsServiceProvider"
+                "ZiffMedia\\LaravelMysqlSnapshots\\MysqlSnapshotsServiceProvider"
             ]
         }
+    },
+    "require-dev": {
+        "orchestra/testbench": "^6.0"
     }
 }
