@@ -1,6 +1,6 @@
 <h1 align="center">
     Laravel Mysql Snapshots<br>
-    <img alt="R" height="150" src="./docs/logo.png">
+    <img alt="R" height="100" src="./docs/logo.png">
 </h1>
 
 ## Installation
