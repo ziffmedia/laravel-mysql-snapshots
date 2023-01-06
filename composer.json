@@ -10,7 +10,7 @@
         }
     ],
     "require": {
-        "php": ">=7.3"
+        "php": ">=8.1"
     },
     "autoload": {
         "psr-4": {
@@ -20,11 +20,6 @@
     "autoload-dev": {
         "psr-4": {
             "ZiffMedia\\LaravelMysqlSnapshots\\Tests\\": "tests/"
-        }
-    },
-    "autoload": {
-        "psr-4": {
-            "ZiffMedia\\LaravelMysqlSnapshots\\": "src/"
         }
     },
     "extra": {

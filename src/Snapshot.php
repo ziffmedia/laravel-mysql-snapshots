@@ -3,7 +3,6 @@
 namespace ZiffMedia\LaravelMysqlSnapshots;
 
 use Carbon\Carbon;
-use Illuminate\Filesystem\FilesystemAdapter;
 
 class Snapshot
 {
@@ -13,7 +12,7 @@ class Snapshot
         protected SnapshotPlan $snapshotPlan
     ) {}
 
-    public function existsLocally()
+    public function existsLocally(): bool
     {
         return $this->snapshotPlan->localDisk->exists("{$this->snapshotPlan->localPath}/{$this->fileName}");
     }
@@ -41,7 +40,7 @@ class Snapshot
         return true;
     }
 
-    public function load($useLocalCopy = false, $keepLocalCopy = false)
+    public function load($useLocalCopy = false, $keepLocalCopy = false): void
     {
         $this->download($useLocalCopy);
 
@@ -57,7 +56,7 @@ class Snapshot
 
         // delete local
         if (!$keepLocalCopy) {
-            $this->snapshotPlan->localDisk->delete("{$this->localPath}/{$this->fileName}");
+            $this->removeLocalCopy();
         }
     }
 

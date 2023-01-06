@@ -20,7 +20,7 @@ class SnapshotPlan
     public array $ignoreTables = [];
     public int $keepLast = 1;
     public array $environmentLocks = [];
-    /** @var Collection|Snapshot[] */
+    /** @var Collection<Snapshot> */
     public readonly Collection $snapshots;
     public readonly FilesystemAdapter $archiveDisk;
     public readonly string $archivePath;
@@ -30,9 +30,9 @@ class SnapshotPlan
     public static array $unacceptedFiles = [];
 
     /**
-     * @return Collection|SnapshotPlan[]
+     * @return Collection<SnapshotPlan>
      */
-    public static function all()
+    public static function all(): Collection
     {
         $snapshotPlanConfigs = config('mysql-snapshots.plans', []);
 
@@ -44,8 +44,8 @@ class SnapshotPlan
             throw new RuntimeException('You cannot use "cached" as a plan name in your mysql-snapshots.php config');
         }
 
-        /** @var SnapshotPlan[] $snapshotPlans */
-        $snapshotPlans = collect($snapshotPlanConfigs)->map(fn ($config, $name) => new SnapshotPlan($name, $config));
+        $snapshotPlans = collect($snapshotPlanConfigs)
+            ->map(fn ($config, $name) => new SnapshotPlan($name, $config));
 
         $archiveDisk = config('mysql-snapshots.filesystem.archive_disk') === 'cloud'
             ? Storage::cloud()
@@ -85,18 +85,18 @@ class SnapshotPlan
     public function __construct(string $name, array $config)
     {
         $this->name = $name;
-
-        $this->connection = isset($config['connection'])
-            ? $config['connection']
-            : config('database.default');
-
+        $this->connection = $config['connection'] ?? config('database.default');
         $this->fileTemplate = $config['file_template'] ?? 'mysql-snapshots-{date}';
 
         $fileTemplateString = Str::of($this->fileTemplate);
 
+        if ($fileTemplateString->substrCount('{') > 1) {
+            throw new InvalidArgumentException("file_template for Snapshot Plan $name can only contain one date replacement");
+        }
+
         $this->fileTemplateParts['prefix'] = (string) $fileTemplateString->before('{');
         $this->fileTemplateParts['postfix'] = (string) $fileTemplateString->after('}');
-        $this->fileTemplateParts['date'] = (string) $fileTemplateString->betweenFirst('{', '}');
+        $this->fileTemplateParts['date'] = (string) $fileTemplateString->between('{', '}');
 
         $dateParts = explode(':', $this->fileTemplateParts['date'], 2);
 
@@ -111,11 +111,8 @@ class SnapshotPlan
         }
 
         $this->mysqldumpOptions = $config['mysqldump_options'] ?? '';
-
-        // @todo
-        // $this->ignoreTables = $config['ignore_tables'] ?? '';
-
-        $this->keepLast = (int) ($config['keep'] ?? 1);
+        $this->ignoreTables = $config['ignore_tables'] ?? [];
+        $this->keepLast = (int) ($config['keep_last'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
 
         $this->snapshots = new Collection;
@@ -137,7 +134,7 @@ class SnapshotPlan
             'connection'        => $this->connection,
             'file_template'     => $this->fileTemplate,
             'mysqldump_options' => $this->mysqldumpOptions,
-            'keep'              => $this->keep,
+            'keep_last'         => $this->keepLast,
             'environment_locks' => $this->environmentLocks
         ];
     }

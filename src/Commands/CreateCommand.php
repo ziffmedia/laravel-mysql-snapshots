@@ -32,7 +32,14 @@ class CreateCommand extends Command
             $this->error("Plan with name $plan does not appear to exist in mysql-snapshots.plans");
         }
 
+        /** @var SnapshotPlan $snapshotPlan */
         $snapshotPlan = $snapshotPlans[$plan];
+
+        if (!$snapshotPlan->canCreate()) {
+            $this->error('Cannot created in this environment (' . app()->environment() . ')');
+
+            return;
+        }
 
         $snapshot = $snapshotPlan->create();
 

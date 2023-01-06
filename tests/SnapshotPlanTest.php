@@ -48,11 +48,11 @@ class SnapshotPlanTest extends TestCase
         $plan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
         $settingsFromPlan = $plan->getSettings();
-        $this->assertEquals($settingsFromPlan['name'], 'daily');
-        $this->assertEquals($settingsFromPlan['file_template'], 'mysql-snapshot-{plan_name}-{date|Ymd}.{extension}');
-        $this->assertEquals($settingsFromPlan['mysqldump_options'], '--single-transaction');
-        $this->assertEquals($settingsFromPlan['keep'], 2);
-        $this->assertEquals($settingsFromPlan['environment_locks'], ['create' => 'production', 'load' => 'local']);
+        $this->assertEquals('daily', $settingsFromPlan['name']);
+        $this->assertEquals('mysql-snapshot-daily-{date|Ymd}', $settingsFromPlan['file_template']);
+        $this->assertEquals('--single-transaction', $settingsFromPlan['mysqldump_options']);
+        $this->assertEquals(2, $settingsFromPlan['keep_last']);
+        $this->assertEquals(['create' => 'production', 'load' => 'local'], $settingsFromPlan['environment_locks']);
     }
 
     public function testCanCreate()
@@ -85,11 +85,6 @@ class SnapshotPlanTest extends TestCase
         $this->assertFalse($plan->canLoad());
     }
 
-    public function testLoad()
-    {
-
-    }
-
     public function testCreate()
     {
         $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
@@ -100,8 +95,7 @@ class SnapshotPlanTest extends TestCase
         $expectedFile = 'cloud-snapshots/mysql-snapshot-daily-' . date('Ymd') . '.sql.gz';
 
         // assert snapshot object is right
-        $this->assertSame($archiveDisk, $snapshot->archiveDisk);
-        $this->assertEquals($expectedFile, $snapshot->archiveFile);
+        $this->assertEquals('mysql-snapshot-daily-' . date('Ymd') . '.sql.gz', $snapshot->fileName);
 
         // assert file actually on disk
         $files = $archiveDisk->allFiles(config('mysql-snapshots.filesystem.archive_path'));
@@ -109,13 +103,13 @@ class SnapshotPlanTest extends TestCase
         $this->assertFileExists(__DIR__ . '/fixtures/local-filesystem/' . $expectedFile);
     }
 
-    protected function defaultDailyConfig()
+    protected function defaultDailyConfig(): array
     {
         return [
             'connection'        => 'mysql',
-            'file_template'     => 'mysql-snapshot-{plan_name}-{date|Ymd}.{extension}',
+            'file_template'     => 'mysql-snapshot-daily-{date|Ymd}',
             'mysqldump_options' => '--single-transaction',
-            'keep'              => 2,
+            'keep_last'         => 2,
             'environment_locks' => [
                 'create' => 'production',
                 'load'   => 'local'

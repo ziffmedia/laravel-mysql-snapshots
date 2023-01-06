@@ -38,6 +38,12 @@ class LoadCommand extends Command
             return;
         }
 
+        if (!$snapshotPlan->canLoad()) {
+            $this->error('Cannot load in this environment (' . app()->environment() . ')');
+
+            return;
+        }
+
         $file = $this->argument('file') ?? 1;
 
         $snapshot = is_numeric($file)
