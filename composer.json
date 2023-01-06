@@ -12,6 +12,10 @@
     "require": {
         "php": ">=8.1"
     },
+    "require-dev": {
+        "laravel/pint": "^1.1",
+        "orchestra/testbench": "^6.0"
+    },
     "autoload": {
         "psr-4": {
             "ZiffMedia\\LaravelMysqlSnapshots\\": "src/"
@@ -28,8 +32,5 @@
                 "ZiffMedia\\LaravelMysqlSnapshots\\MysqlSnapshotsServiceProvider"
             ]
         }
-    },
-    "require-dev": {
-        "orchestra/testbench": "^6.0"
     }
 }
