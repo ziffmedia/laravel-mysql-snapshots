@@ -48,7 +48,7 @@ class SnapshotPlanTest extends TestCase
         $plan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
         $settingsFromPlan = $plan->getSettings();
-        $this->assertEquals('dailyx', $settingsFromPlan['name']);
+        $this->assertEquals('dailyxx', $settingsFromPlan['name']);
         $this->assertEquals('mysql-snapshot-daily-{date|Ymd}', $settingsFromPlan['file_template']);
         $this->assertEquals('--single-transaction', $settingsFromPlan['mysqldump_options']);
         $this->assertEquals(2, $settingsFromPlan['keep_last']);
