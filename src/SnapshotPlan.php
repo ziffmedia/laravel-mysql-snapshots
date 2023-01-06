@@ -204,11 +204,14 @@ class SnapshotPlan
 
         // store in cloud and remove from local
         $this->archiveDisk->put($archiveFile, fopen($localFileFullPath, 'r+'));
-        $this->localDisk->delete($localFileFullPath);
+        $this->localDisk->delete("{$this->localPath}/{$fileName}");
 
         $snapshot = new Snapshot($fileName, $date, $this);
 
-        $this->snapshots->prepend($snapshot);
+        // don't put in list if it matches something that was overwritten
+        if (!$this->snapshots->firstWhere('fileName', $snapshot->fileName)) {
+            $this->snapshots->prepend($snapshot);
+        }
 
         return $snapshot;
     }
