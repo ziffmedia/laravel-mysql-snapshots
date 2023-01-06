@@ -1,11 +1,9 @@
 name: Standards Checks
 
 on:
-  push:
+  pull_request:
     branches:
-      - '*'
-    tags-ignore:
-      - '*'
+      - master
 
 jobs:
   build:
