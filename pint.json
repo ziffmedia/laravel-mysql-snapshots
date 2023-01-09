@@ -1,0 +1,21 @@
+{
+  "preset": "laravel",
+  "rules": {
+    "binary_operator_spaces" : {
+      "operators" : {
+        "=>" : "align_single_space"
+      }
+    },
+    "concat_space" : {
+      "spacing" : "one"
+    },
+    "curly_braces_position": {
+      "anonymous_classes_opening_brace": "same_line"
+    },
+    "method_chaining_indentation": true,
+    "not_operator_with_successor_space": false,
+    "phpdoc_align" : {
+      "align" : "left"
+    }
+  }
+}

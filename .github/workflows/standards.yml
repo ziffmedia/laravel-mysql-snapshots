@@ -6,7 +6,7 @@ on:
       - master
 
 jobs:
-  build:
+  run:
 
     runs-on: ubuntu-latest
     strategy:
@@ -34,9 +34,27 @@ jobs:
         if: steps.composer-cache.outputs.cache-hit != 'true'
         run: composer install --prefer-dist --no-progress --no-suggest
 
-      - name: Run test suite
+      - name: Run phpunit
+        id: phpunit
         run: vendor/bin/phpunit
 
-      - name: Run coding standards check
+      - name: Report phpunit
+        uses: LouisBrunner/checks-action@v1.1.1
+        if: always()
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: PHPUnit Tests
+          conclusion: ${{ steps.phpunit.conclusion }}
+
+      - name: Run pint
+        id: pint
         if: always()
         run: vendor/bin/pint --test
+
+      - name: Report phpunit
+        uses: LouisBrunner/checks-action@v1.1.1
+        if: always()
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Pint Coding Standards
+          conclusion: ${{ steps.pint.conclusion }}

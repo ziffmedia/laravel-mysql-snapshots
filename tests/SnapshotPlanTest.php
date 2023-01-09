@@ -33,8 +33,8 @@ class SnapshotPlanTest extends TestCase
     public function testGetAllPlansBasedOffConfig()
     {
         config()->set('mysql-snapshots.plans', [
-            'daily' => [],
-            'monthly' => []
+            'daily'   => [],
+            'monthly' => [],
         ]);
 
         $plans = SnapshotPlan::all();
@@ -112,8 +112,8 @@ class SnapshotPlanTest extends TestCase
             'keep_last'         => 2,
             'environment_locks' => [
                 'create' => 'production',
-                'load'   => 'local'
-            ]
+                'load'   => 'local',
+            ],
         ];
     }
 
@@ -132,4 +132,3 @@ class SnapshotPlanTest extends TestCase
         }
     }
 }
-

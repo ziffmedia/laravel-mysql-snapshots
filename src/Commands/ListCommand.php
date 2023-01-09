@@ -11,7 +11,7 @@ use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class ListCommand extends Command
 {
-    protected $signature = <<<EOS
+    protected $signature = <<<'EOS'
         mysql-snapshots:list
         {plan? : The Plan name, will default to the first one listed under "plans"}
         EOS;

@@ -3,15 +3,11 @@
 namespace ZiffMedia\LaravelMysqlSnapshots\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use ZiffMedia\LaravelMysqlSnapshots\Snapshot;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class LoadCommand extends Command
 {
-    protected $signature = <<<EOS
+    protected $signature = <<<'EOS'
         mysql-snapshots:load
         {plan? : The Plan name, will default to the first one listed under "plans"}
         {file? : The file to use, will default to the latest file in the plan}
