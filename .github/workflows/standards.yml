@@ -46,7 +46,7 @@ jobs:
           name: PHPUnit Tests
           conclusion: ${{ job.status }}
           output: |
-            {"summary":${{ steps.phpunit.outputs.summary }}}
+            {"summary": "${{ steps.phpunit.conclusion }}" }
 
       - name: Run pint
         id: pint
@@ -61,4 +61,4 @@ jobs:
           name: Pint Coding Standards
           conclusion: ${{ job.status }}
           output: |
-            {"summary":${{ steps.pint.outputs.summary }}}
+            {"summary": "${{ steps.pint.summary }}"}
