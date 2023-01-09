@@ -34,9 +34,31 @@ jobs:
         if: steps.composer-cache.outputs.cache-hit != 'true'
         run: composer install --prefer-dist --no-progress --no-suggest
 
-      - name: Run test suite
-        run: vendor/bin/phpunit --printer mheap\\GithubActionsReporter\\Printer
+      - name: Run phpunit
+        id: phpunit
+        run: vendor/bin/phpunit
 
-      - name: Run coding standards check
+      - name: Report phpunit
+        uses: LouisBrunner/checks-action@v1.1.1
         if: always()
-        run: vendor/bin/pint --test --format=checkstyle | vendor/bin/cs2pr
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: PHPUnit Tests
+          conclusion: ${{ job.status }}
+          output: |
+            {"summary":${{ steps.phpunit.outputs.summary }}}
+
+      - name: Run pint
+        id: pint
+        if: always()
+        run: vendor/bin/pint --test
+
+      - name: Report phpunit
+        uses: LouisBrunner/checks-action@v1.1.1
+        if: always()
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Pint Coding Standards
+          conclusion: ${{ job.status }}
+          output: |
+            {"summary":${{ steps.pint.outputs.summary }}}
