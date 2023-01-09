@@ -44,9 +44,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: PHPUnit Tests
-          conclusion: ${{ job.status }}
-          output: |
-            {"summary": "${{ steps.phpunit.conclusion }}" }
+          conclusion: ${{ steps.phpunit.conclusion }}
 
       - name: Run pint
         id: pint
@@ -59,6 +57,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: Pint Coding Standards
-          conclusion: ${{ job.status }}
-          output: |
-            {"summary": "${{ steps.pint.summary }}"}
+          conclusion: ${{ steps.pint.conclusion }}
