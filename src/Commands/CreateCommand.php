@@ -8,7 +8,7 @@ use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class CreateCommand extends Command
 {
-    protected $signature = <<<EOS
+    protected $signature = <<<'EOS'
         mysql-snapshots:create {plan? : The Plan name, will default to the first one listed under "plans"} {--cleanup}
 
         EOS;
@@ -50,8 +50,6 @@ class CreateCommand extends Command
 
             $this->info("Snapshot removed $numberOfFiles old snapshots.");
         }
-
-
 
         // $snapshotPlans = SnapshotPlan::all()->when($plan, function (Collection $snapshotPlans) use ($plan) {
         //     return $snapshotPlans->filter(function ($snapshotPlan) use ($plan) {

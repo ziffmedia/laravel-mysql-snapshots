@@ -13,20 +13,34 @@ use RuntimeException;
 class SnapshotPlan
 {
     public string $name;
+
     public string $connection;
+
     public string $fileTemplate;
+
     public string $mysqldumpOptions = '';
+
     public array $schemaOnlyTables = [];
+
     public array $ignoreTables = [];
+
     public int $keepLast = 1;
+
     public array $environmentLocks = [];
+
     /** @var Collection<Snapshot> */
     public readonly Collection $snapshots;
+
     public readonly FilesystemAdapter $archiveDisk;
+
     public readonly string $archivePath;
+
     public readonly FilesystemAdapter $localDisk;
+
     public readonly string $localPath;
+
     protected array $fileTemplateParts;
+
     public static array $unacceptedFiles = [];
 
     /**
@@ -135,7 +149,7 @@ class SnapshotPlan
             'file_template'     => $this->fileTemplate,
             'mysqldump_options' => $this->mysqldumpOptions,
             'keep_last'         => $this->keepLast,
-            'environment_locks' => $this->environmentLocks
+            'environment_locks' => $this->environmentLocks,
         ];
     }
 
@@ -335,4 +349,3 @@ class SnapshotPlan
         return $databaseConnectionConfig;
     }
 }
-

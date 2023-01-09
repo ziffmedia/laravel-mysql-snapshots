@@ -8,7 +8,7 @@ return [
         'archive_path' => 'mysql-snapshots',
     ],
 
-    'plans' => [
+    'plans'      => [
         'daily' => [
             'connection'         => null,
             'file_template'      => 'mysql-snapshot-daily-{date:Ymd}',
@@ -18,15 +18,15 @@ return [
             'keep_last'          => 1,
             'environment_locks'  => [
                 'create' => 'production',
-                'load'   => 'local'
-            ]
-        ]
+                'load'   => 'local',
+            ],
+        ],
     ],
 
-    'utilities' => [
+    'utilities'  => [
         'mysqldump' => 'mysqldump',
         'mysql'     => 'mysql',
         'zcat'      => 'zcat',
-        'gzip'      => 'gzip'
-    ]
+        'gzip'      => 'gzip',
+    ],
 ];

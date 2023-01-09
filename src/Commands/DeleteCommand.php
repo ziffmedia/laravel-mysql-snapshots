@@ -7,7 +7,7 @@ use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class DeleteCommand extends Command
 {
-    protected $signature = <<<EOS
+    protected $signature = <<<'EOS'
         mysql-snapshots:delete
         {plan : The Plan name, will default to the first one listed under 'plans'}
         {file : The file to use, will default to the latest file in the plan}

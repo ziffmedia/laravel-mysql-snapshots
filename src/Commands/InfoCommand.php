@@ -7,6 +7,7 @@ use Illuminate\Console\Command;
 class InfoCommand extends Command
 {
     protected $signature = 'mysql-snapshots:info {plan}';
+
     protected $description = 'Check ?';
 
     public function handle()

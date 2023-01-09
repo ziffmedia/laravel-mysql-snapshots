@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 class ClearCacheCommand extends Command
 {
     protected $signature = 'mysql-snapshots:clear-cache {--except-file=}';
+
     protected $description = 'Clear cache of snapshots';
 
     public function handle()

@@ -10,7 +10,8 @@ class Snapshot
         public string $fileName,
         public Carbon $date,
         protected SnapshotPlan $snapshotPlan
-    ) {}
+    ) {
+    }
 
     public function existsLocally(): bool
     {
