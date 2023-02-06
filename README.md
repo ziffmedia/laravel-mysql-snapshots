@@ -17,5 +17,39 @@ You can publish the config file with:
 php artisan vendor:publish --provider='ZiffMedia\LaravelMysqlSnapshots\MysqlSnapshotsServiceProvider'
 ```
 
+Note: the configuration file will lock writing new snapshots to disk to the `production` environment
+while loading snapshots will be locked to the `local` environment.
+
 ## Usage
 
+#### List Snapshots
+
+```bash
+artisan mysql-snapshot:list
+```
+
+#### Create Snapshots
+
+```bash
+artisan mysql-snapshot:create daily
+```
+
+To create snapshots, and automatically cleanup up old snapshots:
+
+```bash
+artisan mysql-snapshot:create daily --cleanup
+```
+
+#### Load Snapshots
+
+To load the newest snapshot in the first available plan:
+
+```bash
+artisan mysql-snapshot:load
+```
+
+With Plan:
+
+```bash
+artisan mysql-snapshot:load daily
+```
