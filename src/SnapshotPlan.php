@@ -5,6 +5,7 @@ namespace ZiffMedia\LaravelMysqlSnapshots;
 use Carbon\Carbon;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -309,6 +310,11 @@ class SnapshotPlan
         }
 
         return $clearedFiles;
+    }
+
+    public function dropLocalTables(): void
+    {
+        DB::connection($this->connection)->getSchemaBuilder()->dropAllTables();
     }
 
     public function runCommandWithMysqlCredentials($command): void

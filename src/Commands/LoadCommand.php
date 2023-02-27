@@ -3,6 +3,7 @@
 namespace ZiffMedia\LaravelMysqlSnapshots\Commands;
 
 use Illuminate\Console\Command;
+use ZiffMedia\LaravelMysqlSnapshots\Snapshot;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class LoadCommand extends Command
@@ -42,6 +43,7 @@ class LoadCommand extends Command
 
         $file = $this->argument('file') ?? 1;
 
+        /** @var Snapshot $snapshot */
         $snapshot = is_numeric($file)
             ? ($snapshotPlan->snapshots[$file - 1] ?? null)
             : $snapshotPlan->snapshots->firstWhere('fileName', $file);
@@ -67,6 +69,8 @@ class LoadCommand extends Command
         if ($useLocalCopy && $snapshot->existsLocally()) {
             $this->info("Using cached file {$snapshot->fileName}");
         }
+
+        $snapshotPlan->dropLocalTables();
 
         $snapshot->load($useLocalCopy, $keepLocalCopy);
 
