@@ -50,25 +50,5 @@ class CreateCommand extends Command
 
             $this->info("Snapshot removed $numberOfFiles old snapshots.");
         }
-
-        // $snapshotPlans = SnapshotPlan::all()->when($plan, function (Collection $snapshotPlans) use ($plan) {
-        //     return $snapshotPlans->filter(function ($snapshotPlan) use ($plan) {
-        //         return $snapshotPlan->name === $plan;
-        //     });
-        // });
-        //
-        // $actionableSnapshotPlans = $snapshotPlans->filter(function (SnapshotPlan $snapshotPlan) {
-        //     if (!$snapshotPlan->canCreate()) {
-        //         $this->warn("'{$snapshotPlan->name}' cannot create a snapshot in this environment (" . app()->environment() . ')');
-        //
-        //         return false;
-        //     }
-        //
-        //     return true;
-        // });
-        //
-        // $snapshotPlans->each(fn (SnapshotPlan $snapshotPlan) => $snapshotPlan->create());
-
-        // $actionableSnapshotPlans->each(fn (SnapshotPlan $snapshotPlan) => $snapshotPlan->cleanup());
     }
 }

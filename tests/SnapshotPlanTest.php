@@ -3,6 +3,7 @@
 namespace ZiffMedia\LaravelMysqlSnapshots\Tests;
 
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use Orchestra\Testbench\TestCase;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
@@ -103,6 +104,54 @@ class SnapshotPlanTest extends TestCase
         $this->assertFileExists(__DIR__ . '/fixtures/local-filesystem/' . $expectedFile);
     }
 
+    public function testCreateWithTableList()
+    {
+        $config = $this->defaultDailyConfig();
+        $config['tables'] = ['foo', 'bar', 'bam'];
+
+        $snapshotPlan = new SnapshotPlan('daily', $config);
+        $snapshot = $snapshotPlan->create();
+
+        // assert command
+        $this->assertStringContainsString('forge foo bar bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+    }
+
+    public function testCreateWithTableListAndSchemaOnly()
+    {
+        $config = $this->defaultDailyConfig();
+        $config['tables'] = ['foo', 'bar', 'bam'];
+        $config['schema_only_tables'] = ['bar'];
+
+        $snapshotPlan = new SnapshotPlan('daily', $config);
+        $snapshot = $snapshotPlan->create();
+
+        // assert command
+        $this->assertStringContainsString('forge foo bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+        $this->assertStringContainsString('forge bar', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+    }
+
+    public function testSnapshotPlanWillThrowExceptionWhenTablesAndIgnoreTablesAreConfigured()
+    {
+        $config = $this->defaultDailyConfig();
+        $config['tables'] = ['foo', 'bar', 'bam'];
+        $config['ignore_tables'] = ['bar'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('tables and ignore_tables cannot both be configured');
+        new SnapshotPlan('daily', $config);
+    }
+
+    public function testSnapshotPlanWillThrowExceptionWhenSchemaOnlyTablesNotInTablesList()
+    {
+        $config = $this->defaultDailyConfig();
+        $config['tables'] = ['foo', 'bam'];
+        $config['schema_only_tables'] = ['bar'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('schema_only_tables that are configured must appear in tables as well');
+        new SnapshotPlan('daily', $config);
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [
@@ -130,5 +179,7 @@ class SnapshotPlanTest extends TestCase
         foreach ($localDisk->allFiles(config('mysql-snapshots.filesystem.local_path')) as $file) {
             $localDisk->delete($file);
         }
+
+        $localDisk->delete('fakemysqldump-arguments.txt');
     }
 }

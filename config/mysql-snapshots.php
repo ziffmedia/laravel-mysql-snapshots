@@ -14,6 +14,7 @@ return [
             'file_template'      => 'mysql-snapshot-daily-{date:Ymd}',
             'mysqldump_options'  => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
             'schema_only_tables' => [],
+            'tables'             => [],
             'ignore_tables'      => [],
             'keep_last'          => 1,
             'environment_locks'  => [

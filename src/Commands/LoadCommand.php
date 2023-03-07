@@ -14,6 +14,7 @@ class LoadCommand extends Command
         {file? : The file to use, will default to the latest file in the plan}
         {--cached : Use caching}
         {--recached : Download a fresh file, even if one exists, keeping it for caching}
+        {--no-drop : Don't drop all tables in database before loading snapshot}
         EOS;
 
     protected $description = 'Load MySQL Snapshot(s)';
@@ -70,7 +71,13 @@ class LoadCommand extends Command
             $this->info("Using cached file {$snapshot->fileName}");
         }
 
-        $snapshotPlan->dropLocalTables();
+        $noDrop = $this->option('no-drop');
+
+        if (! $noDrop) {
+            $this->info("Dropping existing tables");
+
+            $snapshotPlan->dropLocalTables();
+        }
 
         $snapshot->load($useLocalCopy, $keepLocalCopy);
 

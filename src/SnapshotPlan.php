@@ -23,6 +23,8 @@ class SnapshotPlan
 
     public array $schemaOnlyTables = [];
 
+    public array $tables = [];
+
     public array $ignoreTables = [];
 
     public int $keepLast = 1;
@@ -131,7 +133,22 @@ class SnapshotPlan
         }
 
         $this->mysqldumpOptions = $config['mysqldump_options'] ?? '';
+        $this->schemaOnlyTables = $config['schema_only_tables'] ?? [];
+        $this->tables = $config['tables'] ?? [];
         $this->ignoreTables = $config['ignore_tables'] ?? [];
+
+        if ($this->tables && $this->ignoreTables) {
+            throw new InvalidArgumentException('tables and ignore_tables cannot both be configured with tables in a single plan');
+        }
+
+        if ($this->tables && $this->schemaOnlyTables) {
+            foreach ($this->schemaOnlyTables as $schemaOnlyTable) {
+                if (!in_array($schemaOnlyTable, $this->tables)) {
+                    throw new InvalidArgumentException('When using tables configuration, schema_only_tables that are configured must appear in tables as well');
+                }
+            }
+        }
+
         $this->keepLast = (int) ($config['keep_last'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
 
@@ -186,13 +203,19 @@ class SnapshotPlan
 
         $localFileFullPath = $this->localDisk->path("{$this->localPath}/{$fileName}");
 
-        $ignoreTablesOption = $this->ignoreTables ? implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->ignoreTables)) : '';
+        $ignoreTablesOption = $this->ignoreTables && !$this->tables ? implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->ignoreTables)) : '';
 
         $schemaOnlyIgnoreTablesOption = implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->schemaOnlyTables));
         $schemaOnlyIncludeTables = implode(' ', $this->schemaOnlyTables);
 
+        if ($this->tables) {
+            $tables = $this->schemaOnlyTables ? array_diff($this->tables, $this->schemaOnlyTables) : $this->tables;
+        }
+
         // schema and data tables
-        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {$ignoreTablesOption} {$schemaOnlyIgnoreTablesOption} {database} > $localFileFullPath";
+        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file}";
+        $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
+        $command .= " > $localFileFullPath";
 
         $progressMessagesCallback('Running: ' . $command);
 
