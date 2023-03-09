@@ -73,8 +73,8 @@ class LoadCommand extends Command
 
         $noDrop = $this->option('no-drop');
 
-        if (! $noDrop) {
-            $this->info("Dropping existing tables");
+        if (!$noDrop) {
+            $this->info('Dropping existing tables');
 
             $snapshotPlan->dropLocalTables();
         }

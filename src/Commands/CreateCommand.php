@@ -3,7 +3,6 @@
 namespace ZiffMedia\LaravelMysqlSnapshots\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class CreateCommand extends Command

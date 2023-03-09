@@ -205,7 +205,7 @@ class SnapshotPlan
 
         $ignoreTablesOption = $this->ignoreTables && !$this->tables ? implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->ignoreTables)) : '';
 
-        $schemaOnlyIgnoreTablesOption = implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->schemaOnlyTables));
+        $schemaOnlyIgnoreTablesOption = !$this->tables ? implode(' ', array_map(fn ($table) => '--ignore-table={database}.' . $table, $this->schemaOnlyTables)) : '';
         $schemaOnlyIncludeTables = implode(' ', $this->schemaOnlyTables);
 
         if ($this->tables) {
@@ -213,7 +213,7 @@ class SnapshotPlan
         }
 
         // schema and data tables
-        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file}";
+        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
         $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
         $command .= " > $localFileFullPath";
 
@@ -222,7 +222,9 @@ class SnapshotPlan
         $this->runCommandWithMysqlCredentials($command);
 
         if ($schemaOnlyIncludeTables) {
-            $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} {$this->mysqldumpOptions} {$ignoreTablesOption} --no-data {database} {$schemaOnlyIncludeTables} >> $localFileFullPath";
+            $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
+            $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
+            $command .= " >> $localFileFullPath";
 
             $progressMessagesCallback('Running: ' . $command);
 
