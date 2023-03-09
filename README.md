@@ -53,3 +53,11 @@ With Plan:
 ```bash
 artisan mysql-snapshot:load daily
 ```
+
+**Additional options**
+
+`--cached` Keeps a copy of the snapshot so that you don't need to redownload it
+
+`--recached` Download a fresh file, even if one exists, and keeps it cached
+
+`--no-drop` Do not drop all tables in database before loading snapshot
