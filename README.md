@@ -56,8 +56,8 @@ artisan mysql-snapshot:load daily
 
 **Additional options**
 
-`--cached` Keeps a copy of the snapshot so that you don't need to redownload it
+`--cached` Keeps a copy of the snapshot so that you don't need to redownload it on the next run
 
-`--recached` Download a fresh file, even if one exists, and keeps it cached
+`--recached` Downloads a fresh sql file, even if one exists locally, and then keeps it cached
 
-`--no-drop` Do not drop all tables in the database before loading snapshot
+`--no-drop` Do not drop all tables in the database before loading the snapshot
