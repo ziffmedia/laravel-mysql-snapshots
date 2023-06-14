@@ -30,19 +30,12 @@ class Snapshot
     public function download($useLocalCopy = false): bool
     {
         if ($useLocalCopy && $this->existsLocally()) {
-            $this->info('Using local snapshot');
-
             return false;
         }
 
-        $archiveFile = "{$this->snapshotPlan->archivePath}/{$this->fileName}";
-
-        $fileSize = round($this->snapshotPlan->archiveDisk->getSize($archiveFile) / 1024 / 1024) . 'MB';
-
-        $this->info("Downloading remote snapshot ($fileSize)..");
         $this->snapshotPlan->localDisk->put(
             "{$this->snapshotPlan->localPath}/{$this->fileName}",
-            $this->snapshotPlan->archiveDisk->get($archiveFile)
+            $this->snapshotPlan->archiveDisk->get("{$this->snapshotPlan->archivePath}/{$this->fileName}")
         );
 
         return true;
@@ -58,7 +51,6 @@ class Snapshot
         $zcatUtil = config('mysql-snapshots.utilities.zcat');
         $mysqlUtil = config('mysql-snapshots.utilities.mysql');
 
-        $this->info('Running SQL commands');
         $this->snapshotPlan->runCommandWithMysqlCredentials(
             "$zcatUtil $mysqlDumpFile | $mysqlUtil --defaults-extra-file={credentials_file} {database}"
         );
