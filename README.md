@@ -8,7 +8,7 @@
 You can install the package via composer:
 
 ```bash
-compose require ziffmedia/laravel-mysql-snapshots
+composer require ziffmedia/laravel-mysql-snapshots
 ```
 
 You can publish the config file with:
@@ -25,19 +25,19 @@ while loading snapshots will be locked to the `local` environment.
 #### List Snapshots
 
 ```bash
-artisan mysql-snapshot:list
+artisan mysql-snapshots:list
 ```
 
 #### Create Snapshots
 
 ```bash
-artisan mysql-snapshot:create daily
+artisan mysql-snapshots:create daily
 ```
 
 To create snapshots, and automatically cleanup up old snapshots:
 
 ```bash
-artisan mysql-snapshot:create daily --cleanup
+artisan mysql-snapshots:create daily --cleanup
 ```
 
 #### Load Snapshots
@@ -45,13 +45,13 @@ artisan mysql-snapshot:create daily --cleanup
 To load the newest snapshot in the first available plan:
 
 ```bash
-artisan mysql-snapshot:load
+artisan mysql-snapshots:load
 ```
 
 With Plan:
 
 ```bash
-artisan mysql-snapshot:load daily
+artisan mysql-snapshots:load daily
 ```
 
 **Additional options**
