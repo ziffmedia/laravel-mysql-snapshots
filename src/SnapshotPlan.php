@@ -95,6 +95,10 @@ class SnapshotPlan
 
         // re-order the snapshots from latest to earliest
         foreach ($snapshotPlans as $snapshotPlan) {
+            if ($snapshotPlan->snapshots->count() < 2) {
+                continue;
+            }
+
             $snapshotPlan->snapshots
                 ->shift(PHP_INT_MAX) // shift returns new collection here
                 ->sort(fn (Snapshot $a, Snapshot $b) => $b->date->gte($a->date))
