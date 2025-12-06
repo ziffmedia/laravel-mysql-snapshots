@@ -1,6 +1,6 @@
 /vendor
-/composer.lock
 /.idea/
+/.claude/
 /.phpunit.result.cache
 .DS_Store
 Thumbs.db
