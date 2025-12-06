@@ -2,5 +2,6 @@
 /.idea/
 /.claude/
 /.phpunit.result.cache
+/.phpunit.cache
 .DS_Store
 Thumbs.db
