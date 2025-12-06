@@ -6,11 +6,14 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasCommandHelpers;
 use ZiffMedia\LaravelMysqlSnapshots\Snapshot;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class ListCommand extends Command
 {
+    use HasCommandHelpers;
+
     protected $signature = <<<'EOS'
         mysql-snapshots:list
         {plan? : The Plan name, will default to the first one listed under "plans"}
@@ -69,18 +72,7 @@ class ListCommand extends Command
             }
         }
 
-        // Warn about unaccepted files
-        if (count(SnapshotPlan::$unacceptedFiles) > 0) {
-            $this->newLine();
-            $this->warn('Warning: Found ' . count(SnapshotPlan::$unacceptedFiles) . ' file(s) in the archive that do not match any configured plan:');
-
-            foreach (SnapshotPlan::$unacceptedFiles as $unacceptedFile) {
-                $this->line("  {$unacceptedFile}");
-            }
-
-            $this->line('');
-            $this->line('These files may be from removed plans and can be safely deleted if no longer needed.');
-        }
+        $this->warnAboutUnacceptedFiles();
 
         $this->newLine();
     }
