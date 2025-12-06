@@ -155,7 +155,7 @@ class SnapshotPlanTest extends TestCase
         new SnapshotPlan('daily', $config);
     }
 
-    public function testSnapshotPlanHandlesOrphanedFilesFromRemovedPlans()
+    public function test_snapshot_plan_handles_orphaned_files_from_removed_plans()
     {
         // Setup: Create snapshot files that match different plan patterns
         $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
