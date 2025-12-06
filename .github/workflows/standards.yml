@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php-versions: [ '8.1' ]
+        php-versions: [ '8.2', '8.3' ]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -23,7 +23,7 @@ jobs:
 
       - name: Cache Composer packages
         id: composer-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: vendor
           key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
@@ -32,14 +32,14 @@ jobs:
 
       - name: Install dependencies
         if: steps.composer-cache.outputs.cache-hit != 'true'
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
 
       - name: Run phpunit
         id: phpunit
         run: vendor/bin/phpunit
 
       - name: Report phpunit
-        uses: LouisBrunner/checks-action@v1.1.1
+        uses: LouisBrunner/checks-action@v2
         if: always()
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -51,8 +51,8 @@ jobs:
         if: always()
         run: vendor/bin/pint --test
 
-      - name: Report phpunit
-        uses: LouisBrunner/checks-action@v1.1.1
+      - name: Report pint
+        uses: LouisBrunner/checks-action@v2
         if: always()
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
