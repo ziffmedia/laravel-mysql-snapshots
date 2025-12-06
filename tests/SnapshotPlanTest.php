@@ -22,6 +22,9 @@ class SnapshotPlanTest extends TestCase
         config()->set('mysql-snapshots.utilities.mysqldump', __DIR__ . '/fixtures/fakemysqldump');
 
         $this->cleanupFiles();
+
+        // Reset static unacceptedFiles array
+        SnapshotPlan::$unacceptedFiles = [];
     }
 
     protected function tearDown(): void
@@ -150,6 +153,42 @@ class SnapshotPlanTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('schema_only_tables that are configured must appear in tables as well');
         new SnapshotPlan('daily', $config);
+    }
+
+    public function test_snapshot_plan_handles_orphaned_files_from_removed_plans()
+    {
+        // Setup: Create snapshot files that match different plan patterns
+        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+        $archivePath = config('mysql-snapshots.filesystem.archive_path');
+
+        // Create a file that matches a "daily-v8" plan pattern (which we'll pretend was removed)
+        $orphanedFile = $archivePath . '/mysql-snapshot-daily-v8-20240913.sql.gz';
+        $archiveDisk->put($orphanedFile, 'fake snapshot content');
+
+        // Create a file that matches our current "daily" plan pattern
+        $validFile = $archivePath . '/mysql-snapshot-daily-20240913.sql.gz';
+        $archiveDisk->put($validFile, 'fake snapshot content');
+
+        // Configure only the "daily" plan (simulating that "daily-v8" was removed)
+        config()->set('mysql-snapshots.plans', [
+            'daily' => $this->defaultDailyConfig(),
+        ]);
+
+        // This should not throw an exception despite the orphaned file
+        $plans = SnapshotPlan::all();
+
+        // Assert that we got our plan
+        $this->assertCount(1, $plans);
+        $dailyPlan = $plans->first();
+        $this->assertEquals('daily', $dailyPlan->name);
+
+        // Assert that only the matching file was accepted
+        $this->assertCount(1, $dailyPlan->snapshots);
+        $this->assertEquals('mysql-snapshot-daily-20240913.sql.gz', $dailyPlan->snapshots->first()->fileName);
+
+        // Assert that the orphaned file was tracked as unaccepted
+        $this->assertCount(1, SnapshotPlan::$unacceptedFiles);
+        $this->assertStringContainsString('mysql-snapshot-daily-v8-20240913.sql.gz', SnapshotPlan::$unacceptedFiles[0]);
     }
 
     protected function defaultDailyConfig(): array
