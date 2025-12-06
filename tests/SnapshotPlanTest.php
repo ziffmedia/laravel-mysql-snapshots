@@ -31,7 +31,7 @@ class SnapshotPlanTest extends TestCase
         parent::tearDown();
     }
 
-    public function testGetAllPlansBasedOffConfig()
+    public function test_get_all_plans_based_off_config()
     {
         config()->set('mysql-snapshots.plans', [
             'daily'   => [],
@@ -44,7 +44,7 @@ class SnapshotPlanTest extends TestCase
         $this->assertCount(2, $plans->whereInstanceOf(SnapshotPlan::class));
     }
 
-    public function testGetSettings()
+    public function test_get_settings()
     {
         $plan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
@@ -56,7 +56,7 @@ class SnapshotPlanTest extends TestCase
         $this->assertEquals(['create' => 'production', 'load' => 'local'], $settingsFromPlan['environment_locks']);
     }
 
-    public function testCanCreate()
+    public function test_can_create()
     {
         $plan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
@@ -71,7 +71,7 @@ class SnapshotPlanTest extends TestCase
         $this->assertTrue($plan->canCreate());
     }
 
-    public function testCanLoad()
+    public function test_can_load()
     {
         $plan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
@@ -86,7 +86,7 @@ class SnapshotPlanTest extends TestCase
         $this->assertFalse($plan->canLoad());
     }
 
-    public function testCreate()
+    public function test_create()
     {
         $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
         $snapshot = $snapshotPlan->create();
@@ -104,7 +104,7 @@ class SnapshotPlanTest extends TestCase
         $this->assertFileExists(__DIR__ . '/fixtures/local-filesystem/' . $expectedFile);
     }
 
-    public function testCreateWithTableList()
+    public function test_create_with_table_list()
     {
         $config = $this->defaultDailyConfig();
         $config['tables'] = ['foo', 'bar', 'bam'];
@@ -113,10 +113,10 @@ class SnapshotPlanTest extends TestCase
         $snapshot = $snapshotPlan->create();
 
         // assert command
-        $this->assertStringContainsString('forge foo bar bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+        $this->assertStringContainsString('laravel foo bar bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
     }
 
-    public function testCreateWithTableListAndSchemaOnly()
+    public function test_create_with_table_list_and_schema_only()
     {
         $config = $this->defaultDailyConfig();
         $config['tables'] = ['foo', 'bar', 'bam'];
@@ -126,11 +126,11 @@ class SnapshotPlanTest extends TestCase
         $snapshot = $snapshotPlan->create();
 
         // assert command
-        $this->assertStringContainsString('forge foo bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
-        $this->assertStringContainsString('forge bar', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+        $this->assertStringContainsString('laravel foo bam', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
+        $this->assertStringContainsString('laravel bar', file_get_contents(__DIR__ . '/fixtures/local-filesystem/fakemysqldump-arguments.txt'));
     }
 
-    public function testSnapshotPlanWillThrowExceptionWhenTablesAndIgnoreTablesAreConfigured()
+    public function test_snapshot_plan_will_throw_exception_when_tables_and_ignore_tables_are_configured()
     {
         $config = $this->defaultDailyConfig();
         $config['tables'] = ['foo', 'bar', 'bam'];
@@ -141,7 +141,7 @@ class SnapshotPlanTest extends TestCase
         new SnapshotPlan('daily', $config);
     }
 
-    public function testSnapshotPlanWillThrowExceptionWhenSchemaOnlyTablesNotInTablesList()
+    public function test_snapshot_plan_will_throw_exception_when_schema_only_tables_not_in_tables_list()
     {
         $config = $this->defaultDailyConfig();
         $config['tables'] = ['foo', 'bam'];

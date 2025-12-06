@@ -190,7 +190,7 @@ class SnapshotPlan
         return app()->environment($this->environmentLocks['load'] ?? 'local');
     }
 
-    public function create(callable $progressMessagesCallback = null)
+    public function create(?callable $progressMessagesCallback = null)
     {
         $progressMessagesCallback = $progressMessagesCallback ?? fn () => null;
 
