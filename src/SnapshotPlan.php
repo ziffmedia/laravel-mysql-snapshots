@@ -287,7 +287,13 @@ class SnapshotPlan
             $fileDatePart = $fileName->betweenFirst($this->fileTemplateParts['prefix'], $this->fileTemplateParts['postfix']);
         }
 
-        return Carbon::createFromFormat($this->fileTemplateParts['date_format'] . '|', (string) $fileDatePart);
+        try {
+            return Carbon::createFromFormat($this->fileTemplateParts['date_format'] . '|', (string) $fileDatePart);
+        } catch (\Exception $e) {
+            // If Carbon cannot parse the date format (e.g., file from a removed plan with different naming),
+            // return false to indicate this file doesn't match this plan's pattern
+            return false;
+        }
     }
 
     public function accept(string $archiveFileName)
