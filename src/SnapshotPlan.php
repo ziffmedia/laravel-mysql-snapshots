@@ -32,6 +32,8 @@ class SnapshotPlan
 
     public array $environmentLocks = [];
 
+    public array $postLoadCommands = [];
+
     /** @var Collection<Snapshot> */
     public readonly Collection $snapshots;
 
@@ -156,6 +158,7 @@ class SnapshotPlan
 
         $this->keepLast = (int) ($config['keep_last'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
+        $this->postLoadCommands = $config['post_load_commands'] ?? [];
 
         $this->snapshots = new Collection;
 
@@ -356,6 +359,52 @@ class SnapshotPlan
     public function dropLocalTables(): void
     {
         DB::connection($this->connection)->getSchemaBuilder()->dropAllTables();
+    }
+
+    public function executePostLoadCommands(): array
+    {
+        $results = [];
+
+        // Execute global commands first
+        $globalCommands = config('mysql-snapshots.post_load_commands', []);
+        foreach ($globalCommands as $command) {
+            try {
+                DB::connection($this->connection)->statement($command);
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'global',
+                    'success' => true,
+                ];
+            } catch (\Exception $e) {
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'global',
+                    'success' => false,
+                    'error'   => $e->getMessage(),
+                ];
+            }
+        }
+
+        // Execute plan-specific commands
+        foreach ($this->postLoadCommands as $command) {
+            try {
+                DB::connection($this->connection)->statement($command);
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'plan',
+                    'success' => true,
+                ];
+            } catch (\Exception $e) {
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'plan',
+                    'success' => false,
+                    'error'   => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
     }
 
     public function runCommandWithMysqlCredentials($command): void

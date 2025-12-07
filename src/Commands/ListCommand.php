@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasCommandHelpers;
+use ZiffMedia\LaravelMysqlSnapshots\PlanGroup;
 use ZiffMedia\LaravelMysqlSnapshots\Snapshot;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
@@ -34,22 +35,32 @@ class ListCommand extends Command
         $this->newLine();
 
         $snapshotPlans->each(function (SnapshotPlan $snapshotPlan) {
-            $this->info('Plan "' . $snapshotPlan->name . '"');
+            $this->info('Plan: ' . $snapshotPlan->name);
+            $this->newLine();
 
             $snapshots = $snapshotPlan->snapshots;
 
             if ($snapshots->count() === 0) {
-                $this->line('  None yet.');
+                $this->line('  No snapshots found.');
+                $this->newLine();
 
                 return;
             }
 
-            $snapshots->each(function (Snapshot $snapshot, int $index) {
-                $fileNum = $index + 1;
-                $this->line("  <fg=yellow>{$fileNum}.</> {$snapshot->fileName}");
-            });
+            // Build table data
+            $rows = $snapshots->map(function (Snapshot $snapshot, int $index) {
+                return [
+                    $index + 1,
+                    $snapshot->fileName,
+                    $snapshot->date->format('Y-m-d H:i:s'),
+                    $snapshot->getFormattedSize(),
+                ];
+            })->toArray();
 
-            $this->line('');
+            $this->table(
+                ['#', 'Filename', 'Created', 'Size'],
+                $rows
+            );
         });
 
         // check for cached files
@@ -59,21 +70,53 @@ class ListCommand extends Command
         $files = $localDisk->allFiles($localPath);
 
         if ($files) {
-            $this->line('<fg=yellow>Locally cached files:</>');
+            $this->newLine();
+            $this->info('Locally Cached Files:');
+            $this->newLine();
 
+            $cachedRows = [];
             foreach ($files as $file) {
                 if (!Str::startsWith($file, $localPath)) {
                     continue;
                 }
 
                 $fileName = Str::substr($file, strlen($localPath) + 1);
-
-                $this->line("  -- {$fileName}");
+                $size = $localDisk->size($file);
+                $cachedRows[] = [
+                    $fileName,
+                    $this->formatBytes($size),
+                ];
             }
+
+            $this->table(['Filename', 'Size'], $cachedRows);
+        }
+
+        // Show plan groups if they exist
+        $planGroups = PlanGroup::all();
+
+        if ($planGroups->isNotEmpty()) {
+            $this->newLine();
+            $this->info('Plan Groups:');
+            $this->newLine();
+
+            $planGroups->each(function ($planGroup) {
+                $this->line("  <fg=cyan>{$planGroup->name}</> → [" . implode(', ', $planGroup->planNames) . ']');
+            });
         }
 
         $this->warnAboutUnacceptedFiles();
 
         $this->newLine();
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+        for ($i = 0; $bytes > 1024 && $i < 4; $i++) {
+            $bytes /= 1024;
+        }
+
+        return round($bytes, 2) . ' ' . $units[$i];
     }
 }
