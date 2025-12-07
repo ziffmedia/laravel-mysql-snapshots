@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" alt="Laravel MySQL Snapshots" width="500">
+  <img src="art/logo.svg" alt="Laravel MySQL Snapshots" width="500">
 
   <p align="center">
     <strong>Create, manage, and load MySQL database snapshots with ease</strong>
