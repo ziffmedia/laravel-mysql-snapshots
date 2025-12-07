@@ -584,7 +584,7 @@ protected function schedule(Schedule $schedule)
 Run the test suite:
 
 ```bash
-composer test
+phpunit
 ```
 
 ## Changelog
