@@ -191,6 +191,20 @@ class SnapshotPlanTest extends TestCase
         $this->assertStringContainsString('mysql-snapshot-daily-v8-20240913.sql.gz', SnapshotPlan::$unacceptedFiles[0]);
     }
 
+    public function test_snapshot_can_get_size()
+    {
+        $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
+        $snapshot = $snapshotPlan->create();
+
+        $size = $snapshot->getSize();
+        $this->assertIsInt($size);
+        $this->assertGreaterThan(0, $size);
+
+        $formattedSize = $snapshot->getFormattedSize();
+        $this->assertIsString($formattedSize);
+        $this->assertMatchesRegularExpression('/\d+(\.\d+)?\s+(B|KB|MB|GB|TB)/', $formattedSize);
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [

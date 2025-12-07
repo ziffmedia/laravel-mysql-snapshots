@@ -4,6 +4,7 @@ namespace ZiffMedia\LaravelMysqlSnapshots\Commands;
 
 use Illuminate\Console\Command;
 use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasCommandHelpers;
+use ZiffMedia\LaravelMysqlSnapshots\PlanGroup;
 use ZiffMedia\LaravelMysqlSnapshots\Snapshot;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
@@ -13,11 +14,12 @@ class LoadCommand extends Command
 
     protected $signature = <<<'EOS'
         mysql-snapshots:load
-        {plan? : The Plan name, will default to the first one listed under "plans"}
-        {file? : The file to use, will default to the latest file in the plan}
+        {plan? : The Plan or Plan Group name}
+        {file? : The file to use (not applicable for plan groups)}
         {--cached : Use caching}
         {--recached : Download a fresh file, even if one exists, keeping it for caching}
         {--no-drop : Don't drop all tables in database before loading snapshot}
+        {--skip-post-commands : Skip post-load SQL commands}
         EOS;
 
     protected $description = 'Load MySQL Snapshot(s)';
@@ -25,6 +27,48 @@ class LoadCommand extends Command
     public function handle()
     {
         $plan = $this->argument('plan');
+
+        // Check if it's a plan group
+        $planGroup = PlanGroup::find($plan);
+
+        if ($planGroup) {
+            $this->info("Loading all plans in plan group: {$planGroup->name}");
+            $this->newLine();
+
+            $cached = $this->option('cached');
+            $recached = $this->option('recached');
+            $useLocalCopy = $cached && !$recached;
+            $keepLocalCopy = $cached || $recached;
+            $skipPostCommands = $this->option('skip-post-commands');
+
+            $results = $planGroup->loadAll(
+                $useLocalCopy,
+                $keepLocalCopy,
+                function ($message) {
+                    $this->line($message);
+                },
+                $skipPostCommands
+            );
+
+            $this->newLine();
+            $this->info('Load Summary:');
+            $this->table(
+                ['Plan', 'Status', 'Details'],
+                $results->map(function ($result) {
+                    return [
+                        $result['plan'],
+                        $result['success'] ? '<fg=green>Success</>' : '<fg=red>Failed</>',
+                        $result['success']
+                            ? ($result['snapshot'] ?? 'N/A')
+                            : ($result['reason'] ?? $result['error'] ?? 'Unknown'),
+                    ];
+                })
+            );
+
+            $this->warnAboutUnacceptedFiles();
+
+            return;
+        }
 
         $snapshotPlans = SnapshotPlan::all();
 
@@ -82,10 +126,52 @@ class LoadCommand extends Command
             $snapshotPlan->dropLocalTables();
         }
 
-        $snapshot->load($useLocalCopy, $keepLocalCopy);
+        // Setup progress bar if downloading
+        $progressBar = null;
+        $progressCallback = null;
+
+        if (!$useLocalCopy || !$snapshot->existsLocally()) {
+            $progressCallback = function ($downloaded, $total) use (&$progressBar) {
+                if (!$progressBar) {
+                    $progressBar = $this->output->createProgressBar($total);
+                    $progressBar->setFormat('very_verbose');
+                }
+                $progressBar->setProgress($downloaded);
+            };
+        }
+
+        $snapshot->load($useLocalCopy, $keepLocalCopy, $progressCallback);
+
+        if ($progressBar) {
+            $progressBar->finish();
+            $this->newLine();
+        }
 
         if ($keepLocalCopy) {
             $this->info("Keeping {$snapshot->fileName} for future loads");
+        }
+
+        // Execute post-load commands
+        if (!$this->option('skip-post-commands')) {
+            $this->newLine();
+            $this->info('Executing post-load SQL commands...');
+
+            $results = $snapshotPlan->executePostLoadCommands();
+
+            if (count($results) > 0) {
+                foreach ($results as $result) {
+                    if ($result['success']) {
+                        $this->line("  <fg=green>✓</> [{$result['type']}] {$result['command']}");
+                    } else {
+                        $this->error("  <fg=red>✗</> [{$result['type']}] {$result['command']}");
+                        $this->line("    Error: {$result['error']}");
+                    }
+                }
+            } else {
+                $this->line('  No post-load commands configured.');
+            }
+
+            $this->newLine();
         }
 
         $clearedFiles = $snapshotPlan->clearCached($keepLocalCopy ? $snapshot->fileName : null);
