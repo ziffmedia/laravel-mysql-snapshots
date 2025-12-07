@@ -1,63 +1,609 @@
-<h1 align="center">
-    Laravel Mysql Snapshots<br>
-    <img alt="R" height="100" src="./docs/logo.png">
-</h1>
+<div align="center">
+  <img src="logo.svg" alt="Laravel MySQL Snapshots" width="500">
+
+  <p align="center">
+    <strong>Create, manage, and load MySQL database snapshots with ease</strong>
+  </p>
+
+  <p align="center">
+    <a href="https://packagist.org/packages/ziffmedia/laravel-mysql-snapshots"><img src="https://img.shields.io/packagist/v/ziffmedia/laravel-mysql-snapshots.svg?style=flat-square" alt="Latest Version on Packagist"></a>
+    <a href="https://packagist.org/packages/ziffmedia/laravel-mysql-snapshots"><img src="https://img.shields.io/packagist/dt/ziffmedia/laravel-mysql-snapshots.svg?style=flat-square" alt="Total Downloads"></a>
+    <a href="https://github.com/ziffmedia/laravel-mysql-snapshots/actions"><img src="https://img.shields.io/github/actions/workflow/status/ziffmedia/laravel-mysql-snapshots/run-tests.yml?branch=master&style=flat-square" alt="GitHub Tests Action Status"></a>
+  </p>
+</div>
+
+---
+
+## Overview
+
+Laravel MySQL Snapshots is a powerful package that streamlines the process of creating, managing, and loading MySQL database snapshots in your Laravel applications. Perfect for syncing production data to local development environments, creating test fixtures, or maintaining database backups across different storage systems.
+
+## Features
+
+- **📸 Flexible Snapshot Plans** - Define multiple snapshot configurations with custom naming, tables, and options
+- **☁️ Cloud Storage Integration** - Seamlessly store and retrieve snapshots from any Laravel filesystem disk
+- **📊 Enhanced List Display** - View snapshots in formatted tables with file sizes and timestamps
+- **⚡ Smart Caching** - Automatic timestamp-based cache validation for faster subsequent loads
+- **📈 Progress Indicators** - Visual feedback for large snapshot downloads
+- **🔧 Post-Load SQL Commands** - Execute custom SQL commands automatically after loading snapshots
+- **👥 Plan Groups** - Batch operations on related plans with automatic detection
+- **🔒 Environment Locks** - Restrict snapshot creation/loading to specific environments
+- **🗂️ Partial Snapshots** - Include/exclude specific tables or use schema-only dumps
+- **🧹 Automatic Cleanup** - Keep only the most recent N snapshots per plan
 
 ## Installation
 
-You can install the package via composer:
+Install the package via Composer:
 
 ```bash
 composer require ziffmedia/laravel-mysql-snapshots
 ```
 
-You can publish the config file with:
+Publish the configuration file:
 
 ```bash
 php artisan vendor:publish --provider='ZiffMedia\LaravelMysqlSnapshots\MysqlSnapshotsServiceProvider'
 ```
 
-Note: the configuration file will lock writing new snapshots to disk to the `production` environment
-while loading snapshots will be locked to the `local` environment.
+This will create a `config/mysql-snapshots.php` file in your application.
+
+## Configuration
+
+The configuration file allows you to define snapshot plans, storage locations, and behavior. Here's an overview of the key configuration options:
+
+### Basic Configuration Structure
+
+```php
+return [
+    'filesystem' => [
+        'local_disk'       => 'local',      // Local disk for caching
+        'local_path'       => 'mysql-snapshots',
+        'archive_disk'     => 'cloud',      // Cloud disk for storage
+        'archive_path'     => 'mysql-snapshots',
+        'cache_by_default' => false,        // Enable smart caching
+    ],
+
+    // Global SQL commands to run after ANY snapshot load
+    'post_load_commands' => [
+        // 'UPDATE users SET environment = "local"',
+    ],
+
+    // Plan groups: Named groups of plans for batch operations
+    'plan_groups' => [
+        // 'daily' => [
+        //     'plans' => ['daily-base', 'daily-extra'],
+        // ],
+    ],
+
+    'plans' => [
+        'daily' => [
+            'connection'         => null,  // Database connection (null = default)
+            'file_template'      => 'mysql-snapshot-daily-{date:Ymd}',
+            'mysqldump_options'  => '--single-transaction --no-tablespaces',
+            'tables'             => [],    // Empty = all tables
+            'ignore_tables'      => [],
+            'schema_only_tables' => ['failed_jobs'],  // Only dump structure
+            'keep_last'          => 7,     // Keep last N snapshots
+            'environment_locks'  => [
+                'create' => 'production',  // Only create in production
+                'load'   => 'local',       // Only load in local
+            ],
+            'post_load_commands' => [
+                // Plan-specific SQL commands
+            ],
+        ],
+    ],
+
+    'utilities' => [
+        'mysqldump' => 'mysqldump',
+        'mysql'     => 'mysql',
+        'zcat'      => 'zcat',
+        'gzip'      => 'gzip',
+    ],
+];
+```
+
+### Configuration Options Explained
+
+#### Filesystem
+
+- `local_disk` - Laravel disk for local caching (default: `local`)
+- `local_path` - Path on local disk for cached snapshots
+- `archive_disk` - Laravel disk for archived snapshots (typically cloud storage)
+- `archive_path` - Path on archive disk
+- `cache_by_default` - Enable automatic timestamp-based cache validation
+
+#### Plans
+
+Each plan can have the following options:
+
+- `connection` - Database connection name (null for default)
+- `file_template` - Snapshot filename template (supports `{date:format}` placeholder)
+- `mysqldump_options` - Additional options passed to mysqldump
+- `tables` - Array of specific tables to include (empty = all tables)
+- `ignore_tables` - Array of tables to exclude
+- `schema_only_tables` - Array of tables to dump structure only (no data)
+- `keep_last` - Number of snapshots to retain (older ones are deleted)
+- `environment_locks` - Restrict operations to specific environments
+  - `create` - Environment(s) where snapshots can be created
+  - `load` - Environment(s) where snapshots can be loaded
+- `post_load_commands` - Array of SQL commands to execute after loading
 
 ## Usage
 
-#### List Snapshots
+### List Snapshots
+
+View all available snapshots with file sizes and timestamps:
 
 ```bash
-artisan mysql-snapshots:list
+php artisan mysql-snapshots:list
 ```
 
-#### Create Snapshots
+View snapshots for a specific plan:
 
 ```bash
-artisan mysql-snapshots:create daily
+php artisan mysql-snapshots:list daily
 ```
 
-To create snapshots, and automatically cleanup up old snapshots:
+Example output:
+```
+Plan: daily
+
+┌───┬────────────────────────────────────┬─────────────────────┬──────────┐
+│ # │ Filename                           │ Created             │ Size     │
+├───┼────────────────────────────────────┼─────────────────────┼──────────┤
+│ 1 │ mysql-snapshot-daily-20241206.gz   │ 2024-12-06 10:30:00 │ 125.4 MB │
+│ 2 │ mysql-snapshot-daily-20241205.gz   │ 2024-12-05 10:30:00 │ 123.8 MB │
+└───┴────────────────────────────────────┴─────────────────────┴──────────┘
+```
+
+### Create Snapshots
+
+Create a snapshot using the specified plan:
 
 ```bash
-artisan mysql-snapshots:create daily --cleanup
+php artisan mysql-snapshots:create daily
 ```
 
-#### Load Snapshots
-
-To load the newest snapshot in the first available plan:
+Create a snapshot and automatically cleanup old ones:
 
 ```bash
-artisan mysql-snapshots:load
+php artisan mysql-snapshots:create daily --cleanup
 ```
 
-With Plan:
+Create snapshots for all plans in a plan group:
 
 ```bash
-artisan mysql-snapshots:load daily
+php artisan mysql-snapshots:create daily-group
 ```
 
-**Additional options**
+### Load Snapshots
 
-`--cached` Keeps a copy of the snapshot so that you don't need to redownload it on the next run
+Load the newest snapshot from the first available plan:
 
-`--recached` Downloads a fresh sql file, even if one exists locally, and then keeps it cached
+```bash
+php artisan mysql-snapshots:load
+```
 
-`--no-drop` Do not drop all tables in the database before loading the snapshot
+Load a specific plan:
+
+```bash
+php artisan mysql-snapshots:load daily
+```
+
+Load with caching (keeps local copy for faster subsequent loads):
+
+```bash
+php artisan mysql-snapshots:load daily --cached
+```
+
+Download fresh snapshot and keep it cached:
+
+```bash
+php artisan mysql-snapshots:load daily --recached
+```
+
+Load without dropping existing tables:
+
+```bash
+php artisan mysql-snapshots:load daily --no-drop
+```
+
+Skip post-load SQL commands:
+
+```bash
+php artisan mysql-snapshots:load daily --skip-post-commands
+```
+
+Load all plans in a plan group sequentially:
+
+```bash
+php artisan mysql-snapshots:load daily-group
+```
+
+## Advanced Features
+
+### Smart Caching
+
+Enable smart caching to automatically validate cached snapshots based on timestamps:
+
+```php
+'filesystem' => [
+    'cache_by_default' => true,
+],
+```
+
+When enabled, the system stores metadata (`.meta.json` files) alongside cached snapshots. On subsequent loads, it checks if the archive file is newer than the cached version and automatically refreshes if needed.
+
+### Post-Load SQL Commands
+
+Execute SQL commands automatically after loading snapshots. Useful for environment-specific adjustments:
+
+**Global commands** (run after any snapshot load):
+```php
+'post_load_commands' => [
+    'UPDATE users SET email = CONCAT("user+", id, "@example.test") WHERE is_admin = 0',
+    'ANALYZE TABLE users, orders, products',
+],
+```
+
+**Plan-specific commands** (run after loading specific plan):
+```php
+'plans' => [
+    'daily' => [
+        // ...
+        'post_load_commands' => [
+            'UPDATE settings SET environment = "local"',
+            'DELETE FROM cache WHERE expires_at < NOW()',
+        ],
+    ],
+],
+```
+
+### Plan Groups
+
+Group related plans for batch operations:
+
+```php
+'plan_groups' => [
+    'daily' => [
+        'plans' => ['daily-base', 'daily-savings-partial'],
+    ],
+],
+```
+
+Then operate on all plans in the group:
+
+```bash
+# System automatically detects "daily" is a plan group
+php artisan mysql-snapshots:create daily
+php artisan mysql-snapshots:load daily
+```
+
+### Progress Indicators
+
+Large snapshot downloads automatically display progress bars with download speed and percentage:
+
+```
+Loading mysql-snapshot-daily-20241206.gz...
+ 125 MB/250 MB [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░] 50% 5.2 MB/s
+```
+
+## Use Cases & Examples
+
+### Use Case 1: Simple Daily Production Sync
+
+**Scenario:** Sync production database to local development daily.
+
+```php
+'plans' => [
+    'daily' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-daily-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
+        'schema_only_tables' => ['failed_jobs'],
+        'keep_last' => 7,
+        'environment_locks' => [
+            'create' => 'production',
+            'load' => 'local',
+        ],
+        'post_load_commands' => [
+            'UPDATE users SET email = CONCAT("user+", id, "@test.local")',
+        ],
+    ],
+],
+```
+
+**Workflow:**
+```bash
+# On production (automated via cron)
+php artisan mysql-snapshots:create daily --cleanup
+
+# On local
+php artisan mysql-snapshots:load daily --cached
+```
+
+### Use Case 2: Split Large Database
+
+**Scenario:** Production database is too large. Split into base data and a filtered subset of large table.
+
+```php
+'plan_groups' => [
+    'daily' => [
+        'plans' => ['daily-base', 'daily-savings-partial'],
+    ],
+],
+
+'plans' => [
+    'daily-base' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-daily-base-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables',
+        'ignore_tables' => ['savings'],  // Exclude large table
+        'keep_last' => 1,
+        'environment_locks' => [
+            'create' => 'production',
+            'load' => 'local',
+        ],
+    ],
+
+    'daily-savings-partial' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-daily-savings-partial-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="uuid in (select offer_uuid from email_ad_units)"',
+        'tables' => ['savings'],  // Only this table
+        'keep_last' => 1,
+        'environment_locks' => [
+            'create' => 'production',
+            'load' => 'local',
+        ],
+    ],
+],
+```
+
+**Workflow:**
+```bash
+# On production (automated)
+php artisan mysql-snapshots:create daily  # Creates both plans
+
+# On local (system auto-detects plan group and loads both)
+php artisan mysql-snapshots:load daily --cached
+```
+
+### Use Case 3: Multiple Environments with Different Data
+
+**Scenario:** Maintain separate snapshots for staging and production, with environment-specific post-load adjustments.
+
+```php
+'plans' => [
+    'production-daily' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-production-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces',
+        'keep_last' => 7,
+        'environment_locks' => [
+            'create' => 'production',
+            'load' => ['local', 'testing'],
+        ],
+        'post_load_commands' => [
+            'UPDATE settings SET app_env = "local"',
+            'UPDATE users SET email = CONCAT("user+", id, "@test.local") WHERE role != "admin"',
+            'TRUNCATE TABLE sessions',
+        ],
+    ],
+
+    'staging-daily' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-staging-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces',
+        'keep_last' => 3,
+        'environment_locks' => [
+            'create' => 'staging',
+            'load' => ['local', 'testing'],
+        ],
+    ],
+],
+```
+
+### Use Case 4: Testing with Specific Fixtures
+
+**Scenario:** Create specialized snapshots for different test scenarios.
+
+```php
+'plans' => [
+    'test-base' => [
+        'connection' => 'testing',
+        'file_template' => 'test-base-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction',
+        'keep_last' => 1,
+        'environment_locks' => [
+            'create' => 'local',
+            'load' => ['local', 'testing'],
+        ],
+    ],
+
+    'test-with-orders' => [
+        'connection' => 'testing',
+        'file_template' => 'test-orders-{date:Ymd}',
+        'tables' => ['users', 'orders', 'order_items', 'products'],
+        'keep_last' => 1,
+        'environment_locks' => [
+            'create' => 'local',
+            'load' => ['local', 'testing'],
+        ],
+    ],
+],
+```
+
+### Use Case 5: Optimized Performance Snapshots
+
+**Scenario:** Large database with optimizations for faster dumps and loads.
+
+```php
+'plans' => [
+    'daily-full' => [
+        'connection' => null,
+        'file_template' => 'mysql-snapshot-daily-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
+        'schema_only_tables' => ['failed_jobs', 'telescope_entries', 'activity_log'],
+        'ignore_tables' => ['sessions', 'cache'],
+        'keep_last' => 1,
+        'environment_locks' => [
+            'create' => 'production',
+            'load' => 'local',
+        ],
+        'post_load_commands' => [
+            'ANALYZE TABLE users',
+            'ANALYZE TABLE orders',
+            'ANALYZE TABLE products',
+        ],
+    ],
+],
+
+'filesystem' => [
+    'cache_by_default' => true,  // Enable smart caching
+],
+```
+
+**Workflow:**
+```bash
+# First load (downloads from cloud)
+php artisan mysql-snapshots:load daily-full --cached
+
+# Subsequent loads (uses cached copy, very fast)
+php artisan mysql-snapshots:load daily-full --cached
+
+# When new snapshot available (automatically detects and refreshes)
+php artisan mysql-snapshots:load daily-full --cached
+```
+
+## Real-World Configuration Example
+
+Here's a complete configuration from a production application with a large database:
+
+```php
+<?php
+
+return [
+    'filesystem' => [
+        'local_disk' => 'local',
+        'local_path' => 'mysql-snapshots',
+        'archive_disk' => 'cloud',
+        'archive_path' => 'mysql-snapshots',
+        'cache_by_default' => true,
+    ],
+
+    'post_load_commands' => [
+        'SET FOREIGN_KEY_CHECKS=1',
+    ],
+
+    'plan_groups' => [
+        'daily' => [
+            'plans' => ['daily-base', 'daily-savings-partial'],
+        ],
+    ],
+
+    'plans' => [
+        'daily-base' => [
+            'connection' => null,
+            'file_template' => 'mysql-snapshot-daily-base-{date:Ymd}',
+            'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables',
+            'tables' => [],
+            'ignore_tables' => ['savings'],
+            'keep_last' => 1,
+            'environment_locks' => [
+                'create' => 'production',
+                'load' => 'local',
+            ],
+            'post_load_commands' => [
+                'UPDATE users SET email = CONCAT("dev+", id, "@company.local") WHERE is_admin = 0',
+            ],
+        ],
+
+        'daily-savings-partial' => [
+            'connection' => null,
+            'file_template' => 'mysql-snapshot-daily-savings-partial-{date:Ymd}',
+            'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="uuid in (select offer_uuid from email_ad_units)"',
+            'tables' => ['savings'],
+            'keep_last' => 1,
+            'environment_locks' => [
+                'create' => 'production',
+                'load' => 'local',
+            ],
+        ],
+
+        'daily-full' => [
+            'connection' => null,
+            'file_template' => 'mysql-snapshot-daily-{date:Ymd}',
+            'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
+            'schema_only_tables' => ['failed_jobs'],
+            'tables' => [],
+            'keep_last' => 1,
+            'environment_locks' => [
+                'create' => 'production',
+                'load' => 'local',
+            ],
+        ],
+    ],
+
+    'utilities' => [
+        'mysqldump' => 'mysqldump',
+        'mysql' => 'mysql',
+        'zcat' => 'zcat',
+        'gzip' => 'gzip',
+    ],
+];
+```
+
+## Automating Snapshot Creation
+
+### Using Laravel Scheduler
+
+Add to `app/Console/Kernel.php`:
+
+```php
+protected function schedule(Schedule $schedule)
+{
+    // Create daily snapshot at 2 AM
+    $schedule->command('mysql-snapshots:create daily --cleanup')
+        ->dailyAt('02:00')
+        ->onOneServer()
+        ->environments(['production']);
+}
+```
+
+### Using Cron
+
+```bash
+# Create snapshot daily at 2 AM
+0 2 * * * cd /path/to/app && php artisan mysql-snapshots:create daily --cleanup
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+composer test
+```
+
+## Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Security
+
+If you discover any security related issues, please email security@ziffmedia.com instead of using the issue tracker.
+
+## Credits
+
+- [Ziff Media](https://github.com/ziffmedia)
+- [All Contributors](../../contributors)
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
