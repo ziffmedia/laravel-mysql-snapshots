@@ -32,7 +32,7 @@ class SnapshotPlan
 
     public array $environmentLocks = [];
 
-    public array $postLoadCommands = [];
+    public array $postLoadSqls = [];
 
     /** @var Collection<Snapshot> */
     public readonly Collection $snapshots;
@@ -158,7 +158,7 @@ class SnapshotPlan
 
         $this->keepLast = (int) ($config['keep_last'] ?? 1);
         $this->environmentLocks = $config['environment_locks'] ?? ['create' => 'production', 'load' => 'local'];
-        $this->postLoadCommands = $config['post_load_commands'] ?? [];
+        $this->postLoadSqls = $config['post_load_sqls'] ?? [];
 
         $this->snapshots = new Collection;
 
@@ -366,7 +366,7 @@ class SnapshotPlan
         $results = [];
 
         // Execute global commands first
-        $globalCommands = config('mysql-snapshots.post_load_commands', []);
+        $globalCommands = config('mysql-snapshots.post_load_sqls', []);
         foreach ($globalCommands as $command) {
             try {
                 DB::connection($this->connection)->statement($command);
@@ -386,7 +386,7 @@ class SnapshotPlan
         }
 
         // Execute plan-specific commands
-        foreach ($this->postLoadCommands as $command) {
+        foreach ($this->postLoadSqls as $command) {
             try {
                 DB::connection($this->connection)->statement($command);
                 $results[] = [

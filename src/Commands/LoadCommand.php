@@ -50,6 +50,27 @@ class LoadCommand extends Command
                 $skipPostCommands
             );
 
+            // Execute plan group post-load commands
+            if (!$skipPostCommands) {
+                $this->newLine();
+                $this->info('Executing plan group post-load SQL commands...');
+
+                $groupResults = $planGroup->executePostLoadCommands();
+
+                if (count($groupResults) > 0) {
+                    foreach ($groupResults as $result) {
+                        if ($result['success']) {
+                            $this->line("  <fg=green>✓</> [{$result['type']}] {$result['command']}");
+                        } else {
+                            $this->error("  <fg=red>✗</> [{$result['type']}] {$result['command']}");
+                            $this->line("    Error: {$result['error']}");
+                        }
+                    }
+                } else {
+                    $this->line('  No plan group post-load commands configured.');
+                }
+            }
+
             $this->newLine();
             $this->info('Load Summary:');
             $this->table(
@@ -114,10 +135,6 @@ class LoadCommand extends Command
         $useLocalCopy = $cached && !$recached;
         $keepLocalCopy = $cached || $recached;
 
-        if ($useLocalCopy && $snapshot->existsLocally()) {
-            $this->info("Using cached file {$snapshot->fileName}");
-        }
-
         $noDrop = $this->option('no-drop');
 
         if (!$noDrop) {
@@ -140,11 +157,22 @@ class LoadCommand extends Command
             };
         }
 
-        $snapshot->load($useLocalCopy, $keepLocalCopy, $progressCallback);
+        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy, $progressCallback);
 
         if ($progressBar) {
             $progressBar->finish();
             $this->newLine();
+        }
+
+        // Provide cache feedback
+        if ($cacheInfo['used_cache']) {
+            if ($cacheInfo['smart_cache_enabled']) {
+                $this->info('Using cached snapshot (validated by smart cache)');
+            } else {
+                $this->info('Using cached snapshot');
+            }
+        } elseif ($cacheInfo['cache_was_stale']) {
+            $this->info('Downloaded fresh snapshot (cached copy was stale)');
         }
 
         if ($keepLocalCopy) {

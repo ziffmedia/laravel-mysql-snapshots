@@ -137,21 +137,32 @@ class Snapshot
         }
     }
 
-    public function download($useLocalCopy = false, $progressCallback = null): bool
+    public function download($useLocalCopy = false, $progressCallback = null): array
     {
-        $smartCache = config('mysql-snapshots.filesystem.cache_by_default', false);
+        $smartCache = config('mysql-snapshots.cache_by_default', false);
+        $hadCachedCopy = $this->existsLocally();
+        $cacheWasStale = false;
 
         // Honor explicit useLocalCopy flag first
         if ($useLocalCopy && $this->existsLocally() && !$this->shouldRefreshCache()) {
-            return false; // Using existing cache
+            return [
+                'downloaded' => false,
+                'cache_was_stale' => false,
+                'had_cached_copy' => true,
+            ];
         }
 
         // Smart cache: check if we need to refresh
         if ($smartCache && !$useLocalCopy && $this->existsLocally()) {
             if (!$this->shouldRefreshCache()) {
-                return false; // Cache is fresh
+                return [
+                    'downloaded' => false,
+                    'cache_was_stale' => false,
+                    'had_cached_copy' => true,
+                ];
             }
             // Cache is stale, remove it
+            $cacheWasStale = true;
             $this->removeLocalCopy();
         }
 
@@ -173,12 +184,24 @@ class Snapshot
         // Store metadata
         $this->setCacheMetadata($archiveLastModified);
 
-        return true; // Downloaded
+        return [
+            'downloaded' => true,
+            'cache_was_stale' => $cacheWasStale,
+            'had_cached_copy' => $hadCachedCopy,
+        ];
     }
 
-    public function load($useLocalCopy = false, $keepLocalCopy = false, $progressCallback = null): void
+    public function load($useLocalCopy = false, $keepLocalCopy = false, $progressCallback = null): array
     {
-        $this->download($useLocalCopy, $progressCallback);
+        $downloadInfo = $this->download($useLocalCopy, $progressCallback);
+
+        $cacheInfo = [
+            'downloaded' => $downloadInfo['downloaded'],
+            'used_cache' => !$downloadInfo['downloaded'],
+            'cache_was_stale' => $downloadInfo['cache_was_stale'],
+            'had_cached_copy' => $downloadInfo['had_cached_copy'],
+            'smart_cache_enabled' => config('mysql-snapshots.cache_by_default', false),
+        ];
 
         $mysqlDumpFile = $this->snapshotPlan->localDisk->path("{$this->snapshotPlan->localPath}/{$this->fileName}");
 
@@ -194,6 +217,8 @@ class Snapshot
         if (!$keepLocalCopy) {
             $this->removeLocalCopy();
         }
+
+        return $cacheInfo;
     }
 
     public function remove(): bool

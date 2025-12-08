@@ -55,16 +55,17 @@ The configuration file allows you to define snapshot plans, storage locations, a
 
 ```php
 return [
+    'cache_by_default' => false,  // Enable smart caching
+
     'filesystem' => [
-        'local_disk'       => 'local',      // Local disk for caching
-        'local_path'       => 'mysql-snapshots',
-        'archive_disk'     => 'cloud',      // Cloud disk for storage
-        'archive_path'     => 'mysql-snapshots',
-        'cache_by_default' => false,        // Enable smart caching
+        'local_disk'   => 'local',      // Local disk for caching
+        'local_path'   => 'mysql-snapshots',
+        'archive_disk' => 'cloud',      // Cloud disk for storage
+        'archive_path' => 'mysql-snapshots',
     ],
 
     // Global SQL commands to run after ANY snapshot load
-    'post_load_commands' => [
+    'post_load_sqls' => [
         // 'UPDATE users SET environment = "local"',
     ],
 
@@ -88,7 +89,7 @@ return [
                 'create' => 'production',  // Only create in production
                 'load'   => 'local',       // Only load in local
             ],
-            'post_load_commands' => [
+            'post_load_sqls' => [
                 // Plan-specific SQL commands
             ],
         ],
@@ -105,13 +106,16 @@ return [
 
 ### Configuration Options Explained
 
+#### Global Options
+
+- `cache_by_default` - Enable automatic timestamp-based cache validation
+
 #### Filesystem
 
 - `local_disk` - Laravel disk for local caching (default: `local`)
 - `local_path` - Path on local disk for cached snapshots
 - `archive_disk` - Laravel disk for archived snapshots (typically cloud storage)
 - `archive_path` - Path on archive disk
-- `cache_by_default` - Enable automatic timestamp-based cache validation
 
 #### Plans
 
@@ -127,7 +131,7 @@ Each plan can have the following options:
 - `environment_locks` - Restrict operations to specific environments
   - `create` - Environment(s) where snapshots can be created
   - `load` - Environment(s) where snapshots can be loaded
-- `post_load_commands` - Array of SQL commands to execute after loading
+- `post_load_sqls` - Array of SQL commands to execute after loading
 
 ## Usage
 
@@ -152,8 +156,8 @@ Plan: daily
 ┌───┬────────────────────────────────────┬─────────────────────┬──────────┐
 │ # │ Filename                           │ Created             │ Size     │
 ├───┼────────────────────────────────────┼─────────────────────┼──────────┤
-│ 1 │ mysql-snapshot-daily-20241206.gz   │ 2024-12-06 10:30:00 │ 125.4 MB │
-│ 2 │ mysql-snapshot-daily-20241205.gz   │ 2024-12-05 10:30:00 │ 123.8 MB │
+│ 1 │ mysql-snapshot-daily-20250115.gz   │ 2025-01-15 10:30:00 │ 125.4 MB │
+│ 2 │ mysql-snapshot-daily-20250114.gz   │ 2025-01-14 10:30:00 │ 123.8 MB │
 └───┴────────────────────────────────────┴─────────────────────┴──────────┘
 ```
 
@@ -228,20 +232,22 @@ php artisan mysql-snapshots:load daily-group
 Enable smart caching to automatically validate cached snapshots based on timestamps:
 
 ```php
-'filesystem' => [
-    'cache_by_default' => true,
-],
+'cache_by_default' => true,
 ```
 
 When enabled, the system stores metadata (`.meta.json` files) alongside cached snapshots. On subsequent loads, it checks if the archive file is newer than the cached version and automatically refreshes if needed.
 
 ### Post-Load SQL Commands
 
-Execute SQL commands automatically after loading snapshots. Useful for environment-specific adjustments:
+Execute SQL commands automatically after loading snapshots. Useful for environment-specific adjustments. Commands execute in this order:
+
+1. **Global commands** - Run after each individual plan loads
+2. **Plan-specific commands** - Run after the specific plan loads
+3. **Plan group commands** - Run after all plans in a group have loaded
 
 **Global commands** (run after any snapshot load):
 ```php
-'post_load_commands' => [
+'post_load_sqls' => [
     'UPDATE users SET email = CONCAT("user+", id, "@example.test") WHERE is_admin = 0',
     'ANALYZE TABLE users, orders, products',
 ],
@@ -252,9 +258,22 @@ Execute SQL commands automatically after loading snapshots. Useful for environme
 'plans' => [
     'daily' => [
         // ...
-        'post_load_commands' => [
+        'post_load_sqls' => [
             'UPDATE settings SET environment = "local"',
             'DELETE FROM cache WHERE expires_at < NOW()',
+        ],
+    ],
+],
+```
+
+**Plan group commands** (run after all plans in the group have loaded):
+```php
+'plan_groups' => [
+    'daily' => [
+        'plans' => ['daily-base', 'daily-extra'],
+        'post_load_sqls' => [
+            'ANALYZE TABLE users, orders',  // Run after both plans are loaded
+            'OPTIMIZE TABLE products',
         ],
     ],
 ],
@@ -268,6 +287,10 @@ Group related plans for batch operations:
 'plan_groups' => [
     'daily' => [
         'plans' => ['daily-base', 'daily-savings-partial'],
+        'post_load_sqls' => [
+            // Optional: SQL commands to run after ALL plans in group are loaded
+            'ANALYZE TABLE users',
+        ],
     ],
 ],
 ```
@@ -285,7 +308,7 @@ php artisan mysql-snapshots:load daily
 Large snapshot downloads automatically display progress bars with download speed and percentage:
 
 ```
-Loading mysql-snapshot-daily-20241206.gz...
+Loading mysql-snapshot-daily-20250115.gz...
  125 MB/250 MB [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░] 50% 5.2 MB/s
 ```
 
@@ -307,7 +330,7 @@ Loading mysql-snapshot-daily-20241206.gz...
             'create' => 'production',
             'load' => 'local',
         ],
-        'post_load_commands' => [
+        'post_load_sqls' => [
             'UPDATE users SET email = CONCAT("user+", id, "@test.local")',
         ],
     ],
@@ -330,7 +353,7 @@ php artisan mysql-snapshots:load daily --cached
 ```php
 'plan_groups' => [
     'daily' => [
-        'plans' => ['daily-base', 'daily-savings-partial'],
+        'plans' => ['daily-base', 'daily-transactions-partial'],
     ],
 ],
 
@@ -339,7 +362,7 @@ php artisan mysql-snapshots:load daily --cached
         'connection' => null,
         'file_template' => 'mysql-snapshot-daily-base-{date:Ymd}',
         'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables',
-        'ignore_tables' => ['savings'],  // Exclude large table
+        'ignore_tables' => ['transactions'],  // Exclude large table
         'keep_last' => 1,
         'environment_locks' => [
             'create' => 'production',
@@ -347,11 +370,11 @@ php artisan mysql-snapshots:load daily --cached
         ],
     ],
 
-    'daily-savings-partial' => [
+    'daily-transactions-partial' => [
         'connection' => null,
-        'file_template' => 'mysql-snapshot-daily-savings-partial-{date:Ymd}',
-        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="uuid in (select offer_uuid from email_ad_units)"',
-        'tables' => ['savings'],  // Only this table
+        'file_template' => 'mysql-snapshot-daily-transactions-partial-{date:Ymd}',
+        'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="created_at >= \'2025-01-01\'"',
+        'tables' => ['transactions'],  // Only this table
         'keep_last' => 1,
         'environment_locks' => [
             'create' => 'production',
@@ -385,7 +408,7 @@ php artisan mysql-snapshots:load daily --cached
             'create' => 'production',
             'load' => ['local', 'testing'],
         ],
-        'post_load_commands' => [
+        'post_load_sqls' => [
             'UPDATE settings SET app_env = "local"',
             'UPDATE users SET email = CONCAT("user+", id, "@test.local") WHERE role != "admin"',
             'TRUNCATE TABLE sessions',
@@ -452,7 +475,7 @@ php artisan mysql-snapshots:load daily --cached
             'create' => 'production',
             'load' => 'local',
         ],
-        'post_load_commands' => [
+        'post_load_sqls' => [
             'ANALYZE TABLE users',
             'ANALYZE TABLE orders',
             'ANALYZE TABLE products',
@@ -460,9 +483,7 @@ php artisan mysql-snapshots:load daily --cached
     ],
 ],
 
-'filesystem' => [
-    'cache_by_default' => true,  // Enable smart caching
-],
+'cache_by_default' => true,  // Enable smart caching
 ```
 
 **Workflow:**
@@ -485,21 +506,25 @@ Here's a complete configuration from a production application with a large datab
 <?php
 
 return [
+    'cache_by_default' => true,
+
     'filesystem' => [
         'local_disk' => 'local',
         'local_path' => 'mysql-snapshots',
         'archive_disk' => 'cloud',
         'archive_path' => 'mysql-snapshots',
-        'cache_by_default' => true,
     ],
 
-    'post_load_commands' => [
+    'post_load_sqls' => [
         'SET FOREIGN_KEY_CHECKS=1',
     ],
 
     'plan_groups' => [
         'daily' => [
-            'plans' => ['daily-base', 'daily-savings-partial'],
+            'plans' => ['daily-base', 'daily-transactions-partial'],
+            'post_load_sqls' => [
+                'ANALYZE TABLE users',
+            ],
         ],
     ],
 
@@ -509,22 +534,22 @@ return [
             'file_template' => 'mysql-snapshot-daily-base-{date:Ymd}',
             'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables',
             'tables' => [],
-            'ignore_tables' => ['savings'],
+            'ignore_tables' => ['transactions'],
             'keep_last' => 1,
             'environment_locks' => [
                 'create' => 'production',
                 'load' => 'local',
             ],
-            'post_load_commands' => [
+            'post_load_sqls' => [
                 'UPDATE users SET email = CONCAT("dev+", id, "@company.local") WHERE is_admin = 0',
             ],
         ],
 
-        'daily-savings-partial' => [
+        'daily-transactions-partial' => [
             'connection' => null,
-            'file_template' => 'mysql-snapshot-daily-savings-partial-{date:Ymd}',
-            'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="uuid in (select offer_uuid from email_ad_units)"',
-            'tables' => ['savings'],
+            'file_template' => 'mysql-snapshot-daily-transactions-partial-{date:Ymd}',
+            'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0 --skip-lock-tables --where="created_at >= \'2025-01-01\'"',
+            'tables' => ['transactions'],
             'keep_last' => 1,
             'environment_locks' => [
                 'create' => 'production',

@@ -1,16 +1,18 @@
 <?php
 
 return [
+    // Enable smart timestamp-based caching
+    'cache_by_default' => false,
+
     'filesystem' => [
-        'local_disk'       => 'local',
-        'local_path'       => 'mysql-snapshots',
-        'archive_disk'     => 'cloud',
-        'archive_path'     => 'mysql-snapshots',
-        'cache_by_default' => false, // Enable smart timestamp-based caching
+        'local_disk'   => 'local',
+        'local_path'   => 'mysql-snapshots',
+        'archive_disk' => 'cloud',
+        'archive_path' => 'mysql-snapshots',
     ],
 
     // Global SQL commands to run after ANY snapshot load
-    'post_load_commands' => [
+    'post_load_sqls' => [
         // Example: 'SET GLOBAL time_zone = "+00:00"',
         // Example: 'ANALYZE TABLE users',
     ],
@@ -20,6 +22,10 @@ return [
         // Example:
         // 'daily' => [
         //     'plans' => ['daily-subset-1', 'daily-subset-2'],
+        //     'post_load_sqls' => [
+        //         // SQL commands to run after ALL plans in this group have been loaded
+        //         // 'ANALYZE TABLE users',
+        //     ],
         // ],
     ],
 
@@ -37,7 +43,7 @@ return [
                 'load'   => 'local',
             ],
             // Plan-specific SQL commands to run after loading this plan
-            'post_load_commands' => [
+            'post_load_sqls' => [
                 // Example: 'UPDATE users SET environment = "local"',
             ],
         ],

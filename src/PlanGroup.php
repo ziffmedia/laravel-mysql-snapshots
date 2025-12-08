@@ -11,6 +11,8 @@ class PlanGroup
     /** @var array<string> */
     public array $planNames;
 
+    public array $postLoadSqls = [];
+
     /** @var Collection<SnapshotPlan> */
     public readonly Collection $plans;
 
@@ -43,6 +45,7 @@ class PlanGroup
     {
         $this->name = $name;
         $this->planNames = $config['plans'] ?? [];
+        $this->postLoadSqls = $config['post_load_sqls'] ?? [];
 
         if (empty($this->planNames)) {
             throw new \InvalidArgumentException("Plan group '{$name}' must contain at least one plan");
@@ -146,6 +149,42 @@ class PlanGroup
                     'reason'  => 'exception',
                     'error'   => $e->getMessage(),
                 ]);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Execute post-load SQL commands for this plan group
+     * Note: Uses the connection from the first plan in the group
+     */
+    public function executePostLoadCommands(): array
+    {
+        if (empty($this->postLoadSqls)) {
+            return [];
+        }
+
+        $results = [];
+
+        // Use the connection from the first plan in the group
+        $connection = $this->plans->first()->connection;
+
+        foreach ($this->postLoadSqls as $command) {
+            try {
+                \Illuminate\Support\Facades\DB::connection($connection)->statement($command);
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'plan_group',
+                    'success' => true,
+                ];
+            } catch (\Exception $e) {
+                $results[] = [
+                    'command' => $command,
+                    'type'    => 'plan_group',
+                    'success' => false,
+                    'error'   => $e->getMessage(),
+                ];
             }
         }
 
