@@ -37,8 +37,9 @@ class LoadCommand extends Command
 
             $cached = $this->option('cached');
             $recached = $this->option('recached');
+            $cacheByDefault = config('mysql-snapshots.cache_by_default', false);
             $useLocalCopy = $cached && !$recached;
-            $keepLocalCopy = $cached || $recached;
+            $keepLocalCopy = $cached || $recached || $cacheByDefault;
             $skipPostCommands = $this->option('skip-post-commands');
 
             $results = $planGroup->loadAll(
@@ -131,9 +132,10 @@ class LoadCommand extends Command
 
         $cached = $this->option('cached');
         $recached = $this->option('recached');
+        $cacheByDefault = config('mysql-snapshots.cache_by_default', false);
 
         $useLocalCopy = $cached && !$recached;
-        $keepLocalCopy = $cached || $recached;
+        $keepLocalCopy = $cached || $recached || $cacheByDefault;
 
         $noDrop = $this->option('no-drop');
 
