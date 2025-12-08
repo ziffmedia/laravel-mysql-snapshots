@@ -42,50 +42,21 @@ class Snapshot
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
-    protected function getCacheMetadata(): ?array
-    {
-        $metadataFile = "{$this->snapshotPlan->localPath}/{$this->fileName}.meta.json";
-
-        if (!$this->snapshotPlan->localDisk->exists($metadataFile)) {
-            return null;
-        }
-
-        $contents = $this->snapshotPlan->localDisk->get($metadataFile);
-
-        return json_decode($contents, true);
-    }
-
-    protected function setCacheMetadata(int $lastModified): void
-    {
-        $metadataFile = "{$this->snapshotPlan->localPath}/{$this->fileName}.meta.json";
-
-        $this->snapshotPlan->localDisk->put(
-            $metadataFile,
-            json_encode([
-                'fileName'     => $this->fileName,
-                'lastModified' => $lastModified,
-                'cachedAt'     => time(),
-            ])
-        );
-    }
-
     protected function shouldRefreshCache(): bool
     {
         if (!$this->existsLocally()) {
             return true; // No local copy, must download
         }
 
-        $metadata = $this->getCacheMetadata();
-        if (!$metadata) {
-            return true; // No metadata, assume stale
+        // Check if there's a newer snapshot available by comparing filename dates
+        $newestSnapshot = $this->snapshotPlan->snapshots->first();
+
+        if (!$newestSnapshot) {
+            return false; // No newer snapshot available
         }
 
-        $archiveLastModified = $this->snapshotPlan->archiveDisk->lastModified(
-            "{$this->snapshotPlan->archivePath}/{$this->fileName}"
-        );
-
-        // Refresh if archive is newer than cached version
-        return $archiveLastModified > $metadata['lastModified'];
+        // Refresh if the newest available snapshot is newer than the current one
+        return $newestSnapshot->date->gt($this->date);
     }
 
     protected function downloadWithProgress(callable $progressCallback): void
@@ -129,12 +100,6 @@ class Snapshot
         }
 
         $this->snapshotPlan->localDisk->delete("{$this->snapshotPlan->localPath}/{$this->fileName}");
-
-        // Also remove metadata file
-        $metadataFile = "{$this->snapshotPlan->localPath}/{$this->fileName}.meta.json";
-        if ($this->snapshotPlan->localDisk->exists($metadataFile)) {
-            $this->snapshotPlan->localDisk->delete($metadataFile);
-        }
     }
 
     public function download($useLocalCopy = false, $progressCallback = null): array
@@ -166,11 +131,6 @@ class Snapshot
             $this->removeLocalCopy();
         }
 
-        // Download the file
-        $archiveLastModified = $this->snapshotPlan->archiveDisk->lastModified(
-            "{$this->snapshotPlan->archivePath}/{$this->fileName}"
-        );
-
         // Download with or without progress tracking
         if ($progressCallback) {
             $this->downloadWithProgress($progressCallback);
@@ -180,9 +140,6 @@ class Snapshot
                 $this->snapshotPlan->archiveDisk->get("{$this->snapshotPlan->archivePath}/{$this->fileName}")
             );
         }
-
-        // Store metadata
-        $this->setCacheMetadata($archiveLastModified);
 
         return [
             'downloaded' => true,
