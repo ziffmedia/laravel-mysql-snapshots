@@ -2,7 +2,11 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots;
 
+use Exception;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use RuntimeException;
 
 class PlanGroup
 {
@@ -48,7 +52,7 @@ class PlanGroup
         $this->postLoadSqls = $config['post_load_sqls'] ?? [];
 
         if (empty($this->planNames)) {
-            throw new \InvalidArgumentException("Plan group '{$name}' must contain at least one plan");
+            throw new InvalidArgumentException("Plan group '{$name}' must contain at least one plan");
         }
 
         // Load all referenced plans
@@ -57,7 +61,7 @@ class PlanGroup
             $plan = $allPlans->firstWhere('name', $planName);
 
             if (!$plan) {
-                throw new \RuntimeException("Plan group '{$name}' references non-existent plan '{$planName}'");
+                throw new RuntimeException("Plan group '{$name}' references non-existent plan '{$planName}'");
             }
 
             return $plan;
@@ -141,7 +145,7 @@ class PlanGroup
                     'success'  => true,
                     'snapshot' => $snapshot->fileName,
                 ]);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $progressCallback("  Failed: {$e->getMessage()}");
                 $results->push([
                     'plan'    => $plan->name,
@@ -172,13 +176,14 @@ class PlanGroup
 
         foreach ($this->postLoadSqls as $command) {
             try {
-                \Illuminate\Support\Facades\DB::connection($connection)->statement($command);
+                DB::connection($connection)->statement($command);
+
                 $results[] = [
                     'command' => $command,
                     'type'    => 'plan_group',
                     'success' => true,
                 ];
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $results[] = [
                     'command' => $command,
                     'type'    => 'plan_group',
@@ -189,5 +194,24 @@ class PlanGroup
         }
 
         return $results;
+    }
+
+    /**
+     * Drop tables on all unique database connections used by plans in this group
+     */
+    public function dropTables(): void
+    {
+        // Collect unique connections from all plans
+        $uniqueConnections = $this->plans
+            ->map(fn (SnapshotPlan $plan) => $plan->connection)
+            ->unique()
+            ->values();
+
+        // Drop tables once per unique connection
+        foreach ($uniqueConnections as $connection) {
+            DB::connection($connection)
+                ->getSchemaBuilder()
+                ->dropAllTables();
+        }
     }
 }

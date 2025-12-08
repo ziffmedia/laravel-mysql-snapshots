@@ -111,7 +111,7 @@ class Snapshot
         // Honor explicit useLocalCopy flag first
         if ($useLocalCopy && $this->existsLocally() && !$this->shouldRefreshCache()) {
             return [
-                'downloaded' => false,
+                'downloaded'      => false,
                 'cache_was_stale' => false,
                 'had_cached_copy' => true,
             ];
@@ -121,7 +121,7 @@ class Snapshot
         if ($smartCache && !$useLocalCopy && $this->existsLocally()) {
             if (!$this->shouldRefreshCache()) {
                 return [
-                    'downloaded' => false,
+                    'downloaded'      => false,
                     'cache_was_stale' => false,
                     'had_cached_copy' => true,
                 ];
@@ -142,7 +142,7 @@ class Snapshot
         }
 
         return [
-            'downloaded' => true,
+            'downloaded'      => true,
             'cache_was_stale' => $cacheWasStale,
             'had_cached_copy' => $hadCachedCopy,
         ];
@@ -153,10 +153,10 @@ class Snapshot
         $downloadInfo = $this->download($useLocalCopy, $progressCallback);
 
         $cacheInfo = [
-            'downloaded' => $downloadInfo['downloaded'],
-            'used_cache' => !$downloadInfo['downloaded'],
-            'cache_was_stale' => $downloadInfo['cache_was_stale'],
-            'had_cached_copy' => $downloadInfo['had_cached_copy'],
+            'downloaded'          => $downloadInfo['downloaded'],
+            'used_cache'          => !$downloadInfo['downloaded'],
+            'cache_was_stale'     => $downloadInfo['cache_was_stale'],
+            'had_cached_copy'     => $downloadInfo['had_cached_copy'],
             'smart_cache_enabled' => config('mysql-snapshots.cache_by_default', false),
         ];
 

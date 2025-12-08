@@ -42,6 +42,13 @@ class LoadCommand extends Command
             $keepLocalCopy = $cached || $recached || $cacheByDefault;
             $skipPostCommands = $this->option('skip-post-commands');
 
+            $noDrop = $this->option('no-drop');
+
+            if (!$noDrop) {
+                $this->info('Dropping existing tables');
+                $planGroup->dropTables();
+            }
+
             $results = $planGroup->loadAll(
                 $useLocalCopy,
                 $keepLocalCopy,
