@@ -284,6 +284,39 @@ class SnapshotPlanTest extends TestCase
         $this->assertEquals('mysql-snapshot-hourly-2024091310.sql.gz', $hourlyPlan->snapshots[2]->fileName);
     }
 
+    public function test_file_template_with_date_and_time_separated()
+    {
+        // Test with date and time separated by dash (Ymd-His format)
+        $config = $this->defaultDailyConfig();
+        $config['file_template'] = 'mysql-snapshot-{date:Ymd-His}';
+
+        $snapshotPlan = new SnapshotPlan('datetime', $config);
+        $snapshot = $snapshotPlan->create();
+
+        // Verify filename format matches expected pattern (date-time with dash separator)
+        $this->assertMatchesRegularExpression(
+            '/^mysql-snapshot-\d{8}-\d{6}\.sql\.gz$/',
+            $snapshot->fileName,
+            'Filename should match pattern: mysql-snapshot-YYYYMMDD-HHMMSS.sql.gz'
+        );
+
+        // Test that matchFileAndDate can parse the filename correctly
+        $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
+        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+
+        // Use the snapshot's date property to verify parsing
+        $expectedFormat = $snapshot->date->format('Ymd-His');
+        $this->assertEquals($expectedFormat, $parsedDate->format('Ymd-His'));
+
+        // Verify the parsed date components match the snapshot date
+        $this->assertEquals($snapshot->date->format('Y'), $parsedDate->format('Y'));
+        $this->assertEquals($snapshot->date->format('m'), $parsedDate->format('m'));
+        $this->assertEquals($snapshot->date->format('d'), $parsedDate->format('d'));
+        $this->assertEquals($snapshot->date->format('H'), $parsedDate->format('H'));
+        $this->assertEquals($snapshot->date->format('i'), $parsedDate->format('i'));
+        $this->assertEquals($snapshot->date->format('s'), $parsedDate->format('s'));
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [
