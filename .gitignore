@@ -3,5 +3,6 @@
 /.claude/
 /.phpunit.result.cache
 /.phpunit.cache
+/CLAUDE.md
 .DS_Store
 Thumbs.db

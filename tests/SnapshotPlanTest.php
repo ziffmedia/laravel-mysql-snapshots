@@ -205,6 +205,85 @@ class SnapshotPlanTest extends TestCase
         $this->assertMatchesRegularExpression('/\d+(\.\d+)?\s+(B|KB|MB|GB|TB)/', $formattedSize);
     }
 
+    public function test_file_template_with_hour_format()
+    {
+        // Test creating a snapshot with hour format in file template
+        $config = $this->defaultDailyConfig();
+        $config['file_template'] = 'mysql-snapshot-hourly-{date:YmdH}';
+
+        $snapshotPlan = new SnapshotPlan('hourly', $config);
+        $snapshot = $snapshotPlan->create();
+
+        // Expected filename should include the hour
+        $expectedFileName = 'mysql-snapshot-hourly-' . date('YmdH') . '.sql.gz';
+        $this->assertEquals($expectedFileName, $snapshot->fileName);
+
+        // Test that the file was created
+        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+        $files = $archiveDisk->allFiles(config('mysql-snapshots.filesystem.archive_path'));
+        $this->assertCount(1, $files);
+
+        // Test that matchFileAndDate can parse the filename correctly
+        $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
+        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+        $this->assertEquals(date('YmdH'), $parsedDate->format('YmdH'));
+    }
+
+    public function test_file_template_with_hour_and_minute_format()
+    {
+        // Test with hour and minute format
+        $config = $this->defaultDailyConfig();
+        $config['file_template'] = 'mysql-snapshot-{date:YmdHi}';
+
+        $snapshotPlan = new SnapshotPlan('precise', $config);
+        $snapshot = $snapshotPlan->create();
+
+        $expectedFileName = 'mysql-snapshot-' . date('YmdHi') . '.sql.gz';
+        $this->assertEquals($expectedFileName, $snapshot->fileName);
+
+        // Test parsing
+        $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
+        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+        $this->assertEquals(date('YmdHi'), $parsedDate->format('YmdHi'));
+    }
+
+    public function test_loading_snapshots_with_hour_format_from_disk()
+    {
+        // Create multiple snapshots with different hours
+        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+        $archivePath = config('mysql-snapshots.filesystem.archive_path');
+
+        // Simulate snapshots from different hours
+        $archiveDisk->put($archivePath . '/mysql-snapshot-hourly-2024091310.sql.gz', 'fake snapshot 10am');
+        $archiveDisk->put($archivePath . '/mysql-snapshot-hourly-2024091314.sql.gz', 'fake snapshot 2pm');
+        $archiveDisk->put($archivePath . '/mysql-snapshot-hourly-2024091318.sql.gz', 'fake snapshot 6pm');
+
+        // Configure the plan
+        config()->set('mysql-snapshots.plans', [
+            'hourly' => [
+                'connection'        => 'mysql',
+                'file_template'     => 'mysql-snapshot-hourly-{date:YmdH}',
+                'mysqldump_options' => '--single-transaction',
+                'keep_last'         => 2,
+                'environment_locks' => [
+                    'create' => 'production',
+                    'load'   => 'local',
+                ],
+            ],
+        ]);
+
+        // Load all plans and verify it found all three snapshots
+        $plans = SnapshotPlan::all();
+        $hourlyPlan = $plans->firstWhere('name', 'hourly');
+
+        $this->assertCount(3, $hourlyPlan->snapshots);
+
+        // Verify they are sorted newest first
+        $this->assertEquals('mysql-snapshot-hourly-2024091318.sql.gz', $hourlyPlan->snapshots[0]->fileName);
+        $this->assertEquals('mysql-snapshot-hourly-2024091314.sql.gz', $hourlyPlan->snapshots[1]->fileName);
+        $this->assertEquals('mysql-snapshot-hourly-2024091310.sql.gz', $hourlyPlan->snapshots[2]->fileName);
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [
