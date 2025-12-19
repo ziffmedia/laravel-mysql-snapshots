@@ -4,6 +4,11 @@ return [
     // Enable smart timestamp-based caching
     'cache_by_default' => false,
 
+    // Database variant: 'mysql' or 'mariadb'
+    // MariaDB's mysqldump doesn't support some MySQL-specific flags like
+    // --set-gtid-purged and --column-statistics (these are automatically filtered out)
+    'mysql_variant' => 'mysql',
+
     'filesystem' => [
         'local_disk'   => 'local',
         'local_path'   => 'mysql-snapshots',
@@ -33,6 +38,9 @@ return [
         'daily' => [
             'connection'         => null,
             'file_template'      => 'mysql-snapshot-daily-{date:Ymd}',
+            // MySQL 8.0+: '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0'
+            // MariaDB or MySQL <8.0: '--single-transaction --no-tablespaces'
+            // Note: When is_mariadb is true, MySQL-only flags are automatically filtered out
             'mysqldump_options'  => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
             'schema_only_tables' => ['failed_jobs'],
             'tables'             => [],
