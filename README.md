@@ -326,10 +326,6 @@ If you're using MariaDB instead of MySQL, you'll need to adjust your `mysqldump_
 'mysqldump_options' => '--single-transaction --no-tablespaces',
 ```
 
-The following flags are MySQL-specific and will cause errors with MariaDB:
-- `--set-gtid-purged` - MySQL GTID replication feature
-- `--column-statistics` - MySQL 8.0+ histogram statistics feature
-
 ## Use Cases & Examples
 
 ### Use Case 1: Simple Daily Production Sync
