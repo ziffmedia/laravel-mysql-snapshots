@@ -56,7 +56,6 @@ The configuration file allows you to define snapshot plans, storage locations, a
 ```php
 return [
     'cache_by_default' => false,  // Enable smart caching
-    'mysql_variant' => 'mysql',   // 'mysql' or 'mariadb'
 
     'filesystem' => [
         'local_disk'   => 'local',      // Local disk for caching
@@ -110,7 +109,6 @@ return [
 #### Global Options
 
 - `cache_by_default` - Enable automatic timestamp-based cache validation
-- `mysql_variant` - Database variant: `'mysql'` (default) or `'mariadb'`. When set to `'mariadb'`, MySQL-specific mysqldump flags like `--set-gtid-purged` and `--column-statistics` are automatically filtered out
 
 #### Filesystem
 
@@ -316,18 +314,21 @@ Loading mysql-snapshot-daily-20250115.gz...
 
 ### MariaDB Support
 
-If you're using MariaDB instead of MySQL, set the `mysql_variant` configuration option:
+If you're using MariaDB instead of MySQL, you'll need to adjust your `mysqldump_options` since MariaDB's `mysqldump` doesn't support certain MySQL-specific flags.
 
+**MySQL 8.0+ recommended options:**
 ```php
-'mysql_variant' => 'mariadb',
+'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
 ```
 
-MariaDB's `mysqldump` doesn't support certain MySQL-specific flags. When `mysql_variant` is set to `'mariadb'`, the following flags are automatically filtered out from your `mysqldump_options`:
+**MariaDB recommended options:**
+```php
+'mysqldump_options' => '--single-transaction --no-tablespaces',
+```
 
-- `--set-gtid-purged=OFF` (and `ON`, `AUTO`)
-- `--column-statistics=0` (and `1`)
-
-This allows you to use the same `mysqldump_options` configuration across MySQL and MariaDB environments without modification.
+The following flags are MySQL-specific and will cause errors with MariaDB:
+- `--set-gtid-purged` - MySQL GTID replication feature
+- `--column-statistics` - MySQL 8.0+ histogram statistics feature
 
 ## Use Cases & Examples
 
@@ -524,7 +525,6 @@ Here's a complete configuration from a production application with a large datab
 
 return [
     'cache_by_default' => true,
-    'mysql_variant' => 'mysql',  // or 'mariadb'
 
     'filesystem' => [
         'local_disk' => 'local',

@@ -317,61 +317,6 @@ class SnapshotPlanTest extends TestCase
         $this->assertEquals($snapshot->date->format('s'), $parsedDate->format('s'));
     }
 
-    public function test_get_effective_mysqldump_options_returns_all_options_when_mysql_variant()
-    {
-        config()->set('mysql-snapshots.mysql_variant', 'mysql');
-
-        $config = $this->defaultDailyConfig();
-        $config['mysqldump_options'] = '--single-transaction --set-gtid-purged=OFF --column-statistics=0';
-
-        $snapshotPlan = new SnapshotPlan('daily', $config);
-
-        $this->assertEquals(
-            '--single-transaction --set-gtid-purged=OFF --column-statistics=0',
-            $snapshotPlan->getEffectiveMysqldumpOptions()
-        );
-    }
-
-    public function test_get_effective_mysqldump_options_filters_mysql_only_options_when_mariadb_variant()
-    {
-        config()->set('mysql-snapshots.mysql_variant', 'mariadb');
-
-        $config = $this->defaultDailyConfig();
-        $config['mysqldump_options'] = '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0';
-
-        $snapshotPlan = new SnapshotPlan('daily', $config);
-
-        $this->assertEquals(
-            '--single-transaction --no-tablespaces',
-            $snapshotPlan->getEffectiveMysqldumpOptions()
-        );
-    }
-
-    public function test_get_effective_mysqldump_options_handles_all_gtid_values()
-    {
-        config()->set('mysql-snapshots.mysql_variant', 'mariadb');
-
-        $testCases = [
-            '--set-gtid-purged=OFF' => '',
-            '--set-gtid-purged=ON' => '',
-            '--set-gtid-purged=AUTO' => '',
-            '--column-statistics=1' => '',
-        ];
-
-        foreach ($testCases as $mysqlOption => $expected) {
-            $config = $this->defaultDailyConfig();
-            $config['mysqldump_options'] = $mysqlOption;
-
-            $snapshotPlan = new SnapshotPlan('daily', $config);
-
-            $this->assertEquals(
-                $expected,
-                $snapshotPlan->getEffectiveMysqldumpOptions(),
-                "Failed for option: $mysqlOption"
-            );
-        }
-    }
-
     protected function defaultDailyConfig(): array
     {
         return [

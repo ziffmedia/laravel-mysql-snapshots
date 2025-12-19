@@ -23,8 +23,6 @@ class SnapshotPlan
 
     public string $mysqldumpOptions = '';
 
-    public string $mysqlVariant = 'mysql';
-
     public array $schemaOnlyTables = [];
 
     public array $tables = [];
@@ -143,7 +141,6 @@ class SnapshotPlan
         }
 
         $this->mysqldumpOptions = $config['mysqldump_options'] ?? '';
-        $this->mysqlVariant = config('mysql-snapshots.mysql_variant', 'mysql');
         $this->schemaOnlyTables = $config['schema_only_tables'] ?? [];
         $this->tables = $config['tables'] ?? [];
         $this->ignoreTables = $config['ignore_tables'] ?? [];
@@ -188,34 +185,6 @@ class SnapshotPlan
         ];
     }
 
-    /**
-     * Get effective mysqldump options, filtering out incompatible flags based on mysql_variant.
-     */
-    public function getEffectiveMysqldumpOptions(): string
-    {
-        if ($this->mysqlVariant === 'mysql') {
-            return $this->mysqldumpOptions;
-        }
-
-        // Filter out MySQL-specific options that MariaDB doesn't support
-        $mysqlOnlyOptions = [
-            '--set-gtid-purged=OFF',
-            '--set-gtid-purged=ON',
-            '--set-gtid-purged=AUTO',
-            '--column-statistics=0',
-            '--column-statistics=1',
-        ];
-
-        $options = $this->mysqldumpOptions;
-
-        foreach ($mysqlOnlyOptions as $mysqlOnlyOption) {
-            $options = str_replace($mysqlOnlyOption, '', $options);
-        }
-
-        // Clean up extra spaces
-        return trim(preg_replace('/\s+/', ' ', $options));
-    }
-
     public function canCreate()
     {
         return app()->environment($this->environmentLocks['create'] ?? 'production');
@@ -252,12 +221,10 @@ class SnapshotPlan
             $tables = $this->schemaOnlyTables ? array_diff($this->tables, $this->schemaOnlyTables) : $this->tables;
         }
 
-        $effectiveMysqldumpOptions = $this->getEffectiveMysqldumpOptions();
-
         try {
             // schema and data tables
             $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
-            $command .= implode(' ', array_filter([$effectiveMysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
+            $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
             $command .= " > $localFileFullPath";
 
             $progressMessagesCallback('Running: ' . $command);
@@ -266,7 +233,7 @@ class SnapshotPlan
 
             if ($schemaOnlyIncludeTables) {
                 $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
-                $command .= implode(' ', array_filter([$effectiveMysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
+                $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
                 $command .= " >> $localFileFullPath";
 
                 $progressMessagesCallback('Running: ' . $command);
