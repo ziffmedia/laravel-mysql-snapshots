@@ -2,9 +2,12 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots\Tests;
 
+use Illuminate\Process\PendingProcess;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Orchestra\Testbench\TestCase;
+use RuntimeException;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
 class SnapshotPlanTest extends TestCase
@@ -315,6 +318,67 @@ class SnapshotPlanTest extends TestCase
         $this->assertEquals($snapshot->date->format('H'), $parsedDate->format('H'));
         $this->assertEquals($snapshot->date->format('i'), $parsedDate->format('i'));
         $this->assertEquals($snapshot->date->format('s'), $parsedDate->format('s'));
+    }
+
+    public function test_gzip_failure_cleans_up_partial_files()
+    {
+        $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
+
+        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
+        $localPath = config('mysql-snapshots.filesystem.local_path');
+        $fileName = 'mysql-snapshot-daily-' . date('Ymd') . '.sql';
+
+        // Mock Process facade to let mysqldump succeed but make gzip fail
+        Process::fake([
+            // Match mysqldump command - let it succeed
+            '*mysqldump*' => Process::result(exitCode: 0),
+            // Match gzip command - make it fail
+            '*gzip*' => Process::result(
+                output: '',
+                errorOutput: 'gzip: simulated failure',
+                exitCode: 1
+            ),
+        ]);
+
+        try {
+            $snapshotPlan->create();
+            $this->fail('Expected RuntimeException was not thrown');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('gzip command failed', $e->getMessage());
+            $this->assertStringContainsString('simulated failure', $e->getMessage());
+        }
+
+        // Verify both files were cleaned up after the failure
+        $this->assertFalse($localDisk->exists("{$localPath}/{$fileName}"), 'SQL file should be cleaned up after gzip failure');
+        $this->assertFalse($localDisk->exists("{$localPath}/{$fileName}.gz"), 'GZ file should be cleaned up after gzip failure');
+    }
+
+    public function test_mysqldump_failure_cleans_up_partial_file()
+    {
+        $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
+
+        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
+        $localPath = config('mysql-snapshots.filesystem.local_path');
+        $fileName = 'mysql-snapshot-daily-' . date('Ymd') . '.sql';
+
+        // Mock Process facade to make mysqldump fail
+        Process::fake([
+            '*mysqldump*' => Process::result(
+                output: '',
+                errorOutput: 'mysqldump: simulated connection failure',
+                exitCode: 1
+            ),
+        ]);
+
+        try {
+            $snapshotPlan->create();
+            $this->fail('Expected RuntimeException was not thrown');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('Command failed', $e->getMessage());
+        }
+
+        // Verify the partial SQL file was cleaned up
+        $this->assertFalse($localDisk->exists("{$localPath}/{$fileName}"), 'Partial SQL file should be cleaned up after mysqldump failure');
     }
 
     protected function defaultDailyConfig(): array

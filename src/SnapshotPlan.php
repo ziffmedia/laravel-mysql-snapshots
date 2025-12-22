@@ -242,7 +242,7 @@ class SnapshotPlan
             }
         } catch (RuntimeException $e) {
             // Clean up partial file on failure
-            @unlink($localFileFullPath);
+            $this->localDisk->delete("{$this->localPath}/{$fileName}");
 
             throw $e;
         }
@@ -257,8 +257,8 @@ class SnapshotPlan
             $result = Process::run($command);
 
             if ($result->failed()) {
-                @unlink($localFileFullPath);
-                @unlink($localFileFullPath . '.gz');
+                $this->localDisk->delete("{$this->localPath}/{$fileName}");
+                $this->localDisk->delete("{$this->localPath}/{$fileName}.gz");
 
                 throw new RuntimeException('gzip command failed: ' . ($result->errorOutput() ?: $result->output() ?: 'Unknown error'));
             }
