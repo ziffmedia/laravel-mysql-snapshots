@@ -28,8 +28,8 @@ class LoadCommand extends Command
     {
         $plan = $this->argument('plan');
 
-        // Check if it's a plan group
-        $planGroup = PlanGroup::find($plan);
+        // Check if it's a plan group (only if plan was specified)
+        $planGroup = $plan ? PlanGroup::find($plan) : null;
 
         if ($planGroup) {
             $this->info("Loading all plans in plan group: {$planGroup->name}");
