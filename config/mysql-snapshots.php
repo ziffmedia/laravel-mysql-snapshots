@@ -33,6 +33,8 @@ return [
         'daily' => [
             'connection'         => null,
             'file_template'      => 'mysql-snapshot-daily-{date:Ymd}',
+            // MySQL 8.0+: '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0'
+            // MariaDB:    '--single-transaction --no-tablespaces'
             'mysqldump_options'  => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
             'schema_only_tables' => ['failed_jobs'],
             'tables'             => [],

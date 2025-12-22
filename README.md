@@ -312,6 +312,20 @@ Loading mysql-snapshot-daily-20250115.gz...
  125 MB/250 MB [▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░] 50% 5.2 MB/s
 ```
 
+### MariaDB Support
+
+If you're using MariaDB instead of MySQL, you'll need to adjust your `mysqldump_options` since MariaDB's `mysqldump` doesn't support certain MySQL-specific flags.
+
+**MySQL 8.0+ recommended options:**
+```php
+'mysqldump_options' => '--single-transaction --no-tablespaces --set-gtid-purged=OFF --column-statistics=0',
+```
+
+**MariaDB recommended options:**
+```php
+'mysqldump_options' => '--single-transaction --no-tablespaces',
+```
+
 ## Use Cases & Examples
 
 ### Use Case 1: Simple Daily Production Sync

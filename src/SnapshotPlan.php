@@ -7,6 +7,7 @@ use Exception;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -220,23 +221,30 @@ class SnapshotPlan
             $tables = $this->schemaOnlyTables ? array_diff($this->tables, $this->schemaOnlyTables) : $this->tables;
         }
 
-        // schema and data tables
-        $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
-        $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
-        $command .= " > $localFileFullPath";
-
-        $progressMessagesCallback('Running: ' . $command);
-
-        $this->runCommandWithMysqlCredentials($command);
-
-        if ($schemaOnlyIncludeTables) {
+        try {
+            // schema and data tables
             $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
-            $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
-            $command .= " >> $localFileFullPath";
+            $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
+            $command .= " > $localFileFullPath";
 
             $progressMessagesCallback('Running: ' . $command);
 
             $this->runCommandWithMysqlCredentials($command);
+
+            if ($schemaOnlyIncludeTables) {
+                $command = "$mysqldumpUtil --defaults-extra-file={credentials_file} ";
+                $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
+                $command .= " >> $localFileFullPath";
+
+                $progressMessagesCallback('Running: ' . $command);
+
+                $this->runCommandWithMysqlCredentials($command);
+            }
+        } catch (RuntimeException $e) {
+            // Clean up partial file on failure
+            $this->localDisk->delete("{$this->localPath}/{$fileName}");
+
+            throw $e;
         }
 
         $gzipUtil = config('mysql-snapshots.utilities.gzip');
@@ -246,7 +254,14 @@ class SnapshotPlan
 
             $progressMessagesCallback('Running: ' . $command);
 
-            exec($command);
+            $result = Process::run($command);
+
+            if ($result->failed()) {
+                $this->localDisk->delete("{$this->localPath}/{$fileName}");
+                $this->localDisk->delete("{$this->localPath}/{$fileName}.gz");
+
+                throw new RuntimeException('gzip command failed: ' . ($result->errorOutput() ?: $result->output() ?: 'Unknown error'));
+            }
 
             // tack on .gz as that is what the above command does
             $fileName .= '.gz';
@@ -429,9 +444,13 @@ class SnapshotPlan
             $command
         );
 
-        exec($command);
+        $result = Process::run($command);
 
         $disk->delete('mysql-credentials.txt');
+
+        if ($result->failed()) {
+            throw new RuntimeException('Command failed: ' . ($result->errorOutput() ?: $result->output() ?: 'Unknown error'));
+        }
     }
 
     protected function getDatabaseConnectionConfig()
