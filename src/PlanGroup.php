@@ -39,9 +39,15 @@ class PlanGroup
 
     /**
      * Find a plan group by name
+     *
+     * @throws InvalidArgumentException if name is empty
      */
     public static function find(string $name): ?PlanGroup
     {
+        if (empty($name)) {
+            throw new InvalidArgumentException('Plan group name cannot be empty');
+        }
+
         return static::all()->firstWhere('name', $name);
     }
 

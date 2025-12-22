@@ -26,8 +26,8 @@ class CreateCommand extends Command
             $plan = key($plans);
         }
 
-        // Check if it's a plan group
-        $planGroup = PlanGroup::find($plan);
+        // Check if it's a plan group (only if plan exists)
+        $planGroup = $plan ? PlanGroup::find($plan) : null;
 
         if ($planGroup) {
             // Create all plans in plan group
