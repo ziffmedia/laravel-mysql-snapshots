@@ -49,12 +49,13 @@ class LoadCommand extends Command
                 $planGroup->dropTables();
             }
 
+            $planGroup->displayMessagesUsing(function ($message) {
+                $this->line($message);
+            });
+
             $results = $planGroup->loadAll(
                 $useLocalCopy,
                 $keepLocalCopy,
-                function ($message) {
-                    $this->line($message);
-                },
                 $skipPostCommands
             );
 
@@ -154,19 +155,22 @@ class LoadCommand extends Command
 
         // Setup progress bar if downloading
         $progressBar = null;
-        $progressCallback = null;
 
         if (!$useLocalCopy || !$snapshot->existsLocally()) {
-            $progressCallback = function ($downloaded, $total) use (&$progressBar) {
+            $snapshot->displayProgressUsing(function ($downloaded, $total) use (&$progressBar) {
                 if (!$progressBar) {
                     $progressBar = $this->output->createProgressBar($total);
                     $progressBar->setFormat('very_verbose');
                 }
                 $progressBar->setProgress($downloaded);
-            };
+            });
         }
 
-        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy, $progressCallback);
+        $snapshotPlan->displayMessagesUsing(function ($message) {
+            $this->line($message);
+        });
+
+        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy);
 
         if ($progressBar) {
             $progressBar->finish();

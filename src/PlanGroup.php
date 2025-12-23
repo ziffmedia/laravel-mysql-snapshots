@@ -82,21 +82,22 @@ class PlanGroup
      *
      * @return Collection<Snapshot>
      */
-    public function createAll(?callable $progressCallback = null): Collection
+    public function createAll(): Collection
     {
-        $progressCallback = $progressCallback ?? fn () => null;
-
-        return $this->plans->map(function (SnapshotPlan $plan) use ($progressCallback) {
-            $progressCallback("Creating snapshot for plan: {$plan->name}");
+        return $this->plans->map(function (SnapshotPlan $plan) {
+            $this->callMessaging("Creating snapshot for plan: {$plan->name}");
 
             if (!$plan->canCreate()) {
-                $progressCallback('  Skipped (environment lock)');
+                $this->callMessaging('  Skipped (environment lock)');
 
                 return null;
             }
 
-            $snapshot = $plan->create($progressCallback);
-            $progressCallback("  Created: {$snapshot->fileName}");
+            // Pass messaging callback to the plan
+            $plan->displayMessagesUsing($this->messagingCallback ?? fn () => null);
+
+            $snapshot = $plan->create();
+            $this->callMessaging("  Created: {$snapshot->fileName}");
 
             return $snapshot;
         })->filter(); // Remove nulls (skipped plans)
@@ -142,6 +143,11 @@ class PlanGroup
             }
 
             try {
+                // Pass messaging callback to the plan and snapshot
+                $plan->displayMessagesUsing($this->messagingCallback ?? fn () => null);
+                $snapshot->displayMessagesUsing($this->messagingCallback ?? fn () => null);
+                $snapshot->displayProgressUsing($this->progressCallback ?? fn () => null);
+
                 $snapshot->load($useLocalCopy, $keepLocalCopy);
 
                 if (!$skipPostCommands) {
