@@ -439,13 +439,15 @@ class SnapshotPlan
 
         $dbHost = $dbConfig['read']['host'][0] ?? $dbConfig['host'];
 
-        $disk->put('mysql-credentials.txt', implode(PHP_EOL, [
+        $contents = implode(PHP_EOL, [
             '[client]',
             "user = '{$dbConfig['username']}'",
             "password = '{$dbConfig['password']}'",
             "host = '{$dbHost}'",
             "port = '{$dbConfig['port']}'",
-        ]));
+        ]);
+
+        $disk->put('mysql-credentials.txt', $contents);
 
         $command = str_replace(
             ['{credentials_file}', '{database}'],
@@ -455,6 +457,8 @@ class SnapshotPlan
 
         if (config('app.debug')) {
             $this->callMessaging('Using MySQL credentials file at: ' . $disk->path('mysql-credentials.txt'));
+
+            $this->callMessaging('With contents: ' . PHP_EOL . '    ' . str_replace(PHP_EOL, PHP_EOL . '    ', $contents));
         }
 
         $this->callMessaging('Running: ' . $command);
