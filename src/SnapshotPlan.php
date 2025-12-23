@@ -176,7 +176,7 @@ class SnapshotPlan
         $this->localPath = rtrim(config('mysql-snapshots.filesystem.local_path'), '/');
     }
 
-    public function getSettings()
+    public function getSettings(): array
     {
         return [
             'name'              => $this->name,
@@ -188,12 +188,12 @@ class SnapshotPlan
         ];
     }
 
-    public function canCreate()
+    public function canCreate(): bool
     {
         return app()->environment($this->environmentLocks['create'] ?? 'production');
     }
 
-    public function canLoad()
+    public function canLoad(): bool
     {
         return app()->environment($this->environmentLocks['load'] ?? 'local');
     }
