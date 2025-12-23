@@ -7,9 +7,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
+use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasOutputCallbacks;
 
 class PlanGroup
 {
+    use HasOutputCallbacks;
+
     public string $name;
 
     /** @var array<string> */
@@ -105,17 +108,16 @@ class PlanGroup
     public function loadAll(
         bool $useLocalCopy = false,
         bool $keepLocalCopy = false,
-        ?callable $progressCallback = null,
         bool $skipPostCommands = false
     ): Collection {
-        $progressCallback = $progressCallback ?? fn () => null;
         $results = collect();
 
         foreach ($this->plans as $plan) {
-            $progressCallback("Loading plan: {$plan->name}");
+            $this->callMessaging("Loading plan: {$plan->name}");
 
             if (!$plan->canLoad()) {
-                $progressCallback('  Skipped (environment lock)');
+                $this->callMessaging('  Skipped (environment lock)');
+
                 $results->push([
                     'plan'    => $plan->name,
                     'success' => false,
@@ -128,7 +130,8 @@ class PlanGroup
             $snapshot = $plan->snapshots->first();
 
             if (!$snapshot) {
-                $progressCallback('  Skipped (no snapshots available)');
+                $this->callMessaging('  Skipped (no snapshots available)');
+
                 $results->push([
                     'plan'    => $plan->name,
                     'success' => false,
@@ -145,14 +148,16 @@ class PlanGroup
                     $plan->executePostLoadCommands();
                 }
 
-                $progressCallback("  Loaded: {$snapshot->fileName}");
+                $this->callMessaging("  Loaded: {$snapshot->fileName}");
+
                 $results->push([
                     'plan'     => $plan->name,
                     'success'  => true,
                     'snapshot' => $snapshot->fileName,
                 ]);
             } catch (Exception $e) {
-                $progressCallback("  Failed: {$e->getMessage()}");
+                $this->callMessaging("  Failed: {$e->getMessage()}");
+
                 $results->push([
                     'plan'    => $plan->name,
                     'success' => false,
@@ -182,6 +187,8 @@ class PlanGroup
 
         foreach ($this->postLoadSqls as $command) {
             try {
+                $this->callMessaging('Running SQL: ' . $command);
+
                 DB::connection($connection)->statement($command);
 
                 $results[] = [
@@ -215,6 +222,8 @@ class PlanGroup
 
         // Drop tables once per unique connection
         foreach ($uniqueConnections as $connection) {
+            $this->callMessaging('Dropping tables on connection: ' . $connection);
+
             DB::connection($connection)
                 ->getSchemaBuilder()
                 ->dropAllTables();
