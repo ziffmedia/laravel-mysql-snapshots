@@ -453,9 +453,15 @@ class SnapshotPlan
             $command
         );
 
+        if (config('app.debug')) {
+            $this->callMessaging('Using MySQL credentials file at: ' . $disk->path('mysql-credentials.txt'));
+        }
+
         $this->callMessaging('Running: ' . $command);
 
         $result = Process::run($command);
+
+        $this->callMessaging('Deleted MySQL credentials file');
 
         $disk->delete('mysql-credentials.txt');
 
