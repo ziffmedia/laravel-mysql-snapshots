@@ -83,8 +83,7 @@ class SnapshotPlan
             $archiveFileName = Str::substr($archiveFile, strlen($archivePath) + 1);
 
             $snapshotPlansOrdered = $snapshotPlans->sort(
-                fn (SnapshotPlan $a, SnapshotPlan $b) =>
-                    (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
+                fn (SnapshotPlan $a, SnapshotPlan $b) => (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
                     > (strlen($a->fileTemplateParts['prefix']) + strlen($a->fileTemplateParts['postfix']))
             );
 
