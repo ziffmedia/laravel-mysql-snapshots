@@ -82,10 +82,11 @@ class SnapshotPlan
 
             $archiveFileName = Str::substr($archiveFile, strlen($archivePath) + 1);
 
-            $snapshotPlansOrdered = $snapshotPlans->sort(function (SnapshotPlan $a, SnapshotPlan $b) {
-                return (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
-                    > (strlen($a->fileTemplateParts['prefix']) + strlen($a->fileTemplateParts['postfix']));
-            });
+            $snapshotPlansOrdered = $snapshotPlans->sort(
+                fn (SnapshotPlan $a, SnapshotPlan $b) =>
+                    (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
+                    > (strlen($a->fileTemplateParts['prefix']) + strlen($a->fileTemplateParts['postfix']))
+            );
 
             foreach ($snapshotPlansOrdered as $snapshotPlan) {
                 $accepted = $snapshotPlan->accept($archiveFileName);

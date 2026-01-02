@@ -34,9 +34,7 @@ class CreateCommand extends Command
             $this->info("Creating snapshots for plan group: {$planGroup->name}");
             $this->newLine();
 
-            $planGroup->displayMessagesUsing(function ($message) {
-                $this->line($message);
-            });
+            $planGroup->displayMessagesUsing(fn ($message) => $this->line($message));
 
             $snapshots = $planGroup->createAll();
 
@@ -73,9 +71,7 @@ class CreateCommand extends Command
             return;
         }
 
-        $snapshotPlan->displayMessagesUsing(function ($message) {
-            $this->line($message);
-        });
+        $snapshotPlan->displayMessagesUsing(fn ($message) => $this->line($message));
 
         $snapshot = $snapshotPlan->create();
 

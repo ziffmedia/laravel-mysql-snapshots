@@ -22,15 +22,16 @@ class ListCommand extends Command
 
     protected $description = 'List MySQL Snapshot(s)';
 
-    public function handle()
+    public function handle(): int
     {
         $plan = $this->argument('plan');
 
-        $snapshotPlans = SnapshotPlan::all()->when($plan, function (Collection $snapshotPlans) use ($plan) {
-            return $snapshotPlans->filter(function ($snapshotPlan) use ($plan) {
-                return $snapshotPlan->name === $plan;
-            });
-        });
+        $snapshotPlans = SnapshotPlan::all()->when(
+            $plan,
+            fn (Collection $snapshotPlans) => $snapshotPlans->filter(
+                fn ($snapshotPlan) => $snapshotPlan->name === $plan
+            )
+        );
 
         $this->newLine();
 
@@ -48,14 +49,14 @@ class ListCommand extends Command
             }
 
             // Build table data
-            $rows = $snapshots->map(function (Snapshot $snapshot, int $index) {
-                return [
+            $rows = $snapshots->map(
+                fn (Snapshot $snapshot, int $index) => [
                     $index + 1,
                     $snapshot->fileName,
                     $snapshot->date->format('Y-m-d H:i:s'),
                     $snapshot->getFormattedSize(),
-                ];
-            })->toArray();
+                ]
+            )->toArray();
 
             $this->table(
                 ['#', 'Filename', 'Created', 'Size'],
@@ -99,17 +100,19 @@ class ListCommand extends Command
             $this->info('Plan Groups:');
             $this->newLine();
 
-            $planGroups->each(function ($planGroup) {
-                $this->line("  <fg=cyan>{$planGroup->name}</> → [" . implode(', ', $planGroup->planNames) . ']');
-            });
+            $planGroups->each(
+                fn ($planGroup) => $this->line("  <fg=cyan>{$planGroup->name}</> → [" . implode(', ', $planGroup->planNames) . ']')
+            );
         }
 
         $this->warnAboutUnacceptedFiles();
 
         $this->newLine();
+
+        return static::SUCCESS;
     }
 
-    private function formatBytes(int $bytes): string
+    protected function formatBytes(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
 
