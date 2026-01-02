@@ -62,6 +62,8 @@ class ListCommand extends Command
                 ['#', 'Filename', 'Created', 'Size'],
                 $rows
             );
+
+            $this->newLine();
         });
 
         // check for cached files
