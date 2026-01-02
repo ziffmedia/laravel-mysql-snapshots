@@ -12,9 +12,12 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
+use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasOutputCallbacks;
 
 class SnapshotPlan
 {
+    use HasOutputCallbacks;
+
     public string $name;
 
     public string $connection;
@@ -79,10 +82,10 @@ class SnapshotPlan
 
             $archiveFileName = Str::substr($archiveFile, strlen($archivePath) + 1);
 
-            $snapshotPlansOrdered = $snapshotPlans->sort(function (SnapshotPlan $a, SnapshotPlan $b) {
-                return (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
-                    > (strlen($a->fileTemplateParts['prefix']) + strlen($a->fileTemplateParts['postfix']));
-            });
+            $snapshotPlansOrdered = $snapshotPlans->sort(
+                fn (SnapshotPlan $a, SnapshotPlan $b) => (strlen($b->fileTemplateParts['prefix']) + strlen($b->fileTemplateParts['postfix']))
+                    > (strlen($a->fileTemplateParts['prefix']) + strlen($a->fileTemplateParts['postfix']))
+            );
 
             foreach ($snapshotPlansOrdered as $snapshotPlan) {
                 $accepted = $snapshotPlan->accept($archiveFileName);
@@ -173,7 +176,7 @@ class SnapshotPlan
         $this->localPath = rtrim(config('mysql-snapshots.filesystem.local_path'), '/');
     }
 
-    public function getSettings()
+    public function getSettings(): array
     {
         return [
             'name'              => $this->name,
@@ -185,20 +188,18 @@ class SnapshotPlan
         ];
     }
 
-    public function canCreate()
+    public function canCreate(): bool
     {
         return app()->environment($this->environmentLocks['create'] ?? 'production');
     }
 
-    public function canLoad()
+    public function canLoad(): bool
     {
         return app()->environment($this->environmentLocks['load'] ?? 'local');
     }
 
-    public function create(?callable $progressMessagesCallback = null)
+    public function create(): Snapshot
     {
-        $progressMessagesCallback = $progressMessagesCallback ?? fn () => null;
-
         $date = Carbon::now();
         $dateAsTitle = Str::title($date->format($this->fileTemplateParts['date_format']));
 
@@ -227,7 +228,7 @@ class SnapshotPlan
             $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, $schemaOnlyIgnoreTablesOption, '{database}', implode(' ', $tables ?? [])]));
             $command .= " > $localFileFullPath";
 
-            $progressMessagesCallback('Running: ' . $command);
+            $this->callMessaging('Running: ' . $command);
 
             $this->runCommandWithMysqlCredentials($command);
 
@@ -236,7 +237,7 @@ class SnapshotPlan
                 $command .= implode(' ', array_filter([$this->mysqldumpOptions, $ignoreTablesOption, '--no-data {database}', $schemaOnlyIncludeTables]));
                 $command .= " >> $localFileFullPath";
 
-                $progressMessagesCallback('Running: ' . $command);
+                $this->callMessaging('Running: ' . $command);
 
                 $this->runCommandWithMysqlCredentials($command);
             }
@@ -252,7 +253,7 @@ class SnapshotPlan
         if ($gzipUtil) {
             $command = "$gzipUtil -f $localFileFullPath";
 
-            $progressMessagesCallback('Running: ' . $command);
+            $this->callMessaging('Running: ' . $command);
 
             $result = Process::run($command);
 
@@ -373,6 +374,8 @@ class SnapshotPlan
 
     public function dropLocalTables(): void
     {
+        $this->callMessaging('Dropping all tables on connection ' . $this->connection);
+
         DB::connection($this->connection)->getSchemaBuilder()->dropAllTables();
     }
 
@@ -384,13 +387,16 @@ class SnapshotPlan
         $globalCommands = config('mysql-snapshots.post_load_sqls', []);
         foreach ($globalCommands as $command) {
             try {
+                $this->callMessaging('Running SQL: ' . $command);
+
                 DB::connection($this->connection)->statement($command);
+
                 $results[] = [
                     'command' => $command,
                     'type'    => 'global',
                     'success' => true,
                 ];
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $results[] = [
                     'command' => $command,
                     'type'    => 'global',
@@ -403,13 +409,16 @@ class SnapshotPlan
         // Execute plan-specific commands
         foreach ($this->postLoadSqls as $command) {
             try {
+                $this->callMessaging('Running SQL: ' . $command);
+
                 DB::connection($this->connection)->statement($command);
+
                 $results[] = [
                     'command' => $command,
                     'type'    => 'plan',
                     'success' => true,
                 ];
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $results[] = [
                     'command' => $command,
                     'type'    => 'plan',
@@ -430,13 +439,15 @@ class SnapshotPlan
 
         $dbHost = $dbConfig['read']['host'][0] ?? $dbConfig['host'];
 
-        $disk->put('mysql-credentials.txt', implode(PHP_EOL, [
+        $contents = implode(PHP_EOL, [
             '[client]',
             "user = '{$dbConfig['username']}'",
             "password = '{$dbConfig['password']}'",
             "host = '{$dbHost}'",
             "port = '{$dbConfig['port']}'",
-        ]));
+        ]);
+
+        $disk->put('mysql-credentials.txt', $contents);
 
         $command = str_replace(
             ['{credentials_file}', '{database}'],
@@ -444,7 +455,17 @@ class SnapshotPlan
             $command
         );
 
+        if (config('app.debug')) {
+            $this->callMessaging('Using MySQL credentials file at: ' . $disk->path('mysql-credentials.txt'));
+
+            $this->callMessaging('With contents: ' . PHP_EOL . '    ' . str_replace(PHP_EOL, PHP_EOL . '    ', $contents));
+        }
+
+        $this->callMessaging('Running: ' . $command);
+
         $result = Process::run($command);
+
+        $this->callMessaging('Deleted MySQL credentials file');
 
         $disk->delete('mysql-credentials.txt');
 

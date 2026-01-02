@@ -49,12 +49,11 @@ class LoadCommand extends Command
                 $planGroup->dropTables();
             }
 
+            $planGroup->displayMessagesUsing(fn ($message) => $this->line($message));
+
             $results = $planGroup->loadAll(
                 $useLocalCopy,
                 $keepLocalCopy,
-                function ($message) {
-                    $this->line($message);
-                },
                 $skipPostCommands
             );
 
@@ -154,32 +153,31 @@ class LoadCommand extends Command
 
         // Setup progress bar if downloading
         $progressBar = null;
-        $progressCallback = null;
 
         if (!$useLocalCopy || !$snapshot->existsLocally()) {
-            $progressCallback = function ($downloaded, $total) use (&$progressBar) {
+            $snapshot->displayProgressUsing(function ($downloaded, $total) use (&$progressBar) {
                 if (!$progressBar) {
                     $progressBar = $this->output->createProgressBar($total);
                     $progressBar->setFormat('very_verbose');
                 }
+
                 $progressBar->setProgress($downloaded);
-            };
+            });
         }
 
-        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy, $progressCallback);
+        $snapshotPlan->displayMessagesUsing(fn ($message) => $this->line($message));
+
+        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy);
 
         if ($progressBar) {
             $progressBar->finish();
+
             $this->newLine();
         }
 
         // Provide cache feedback
         if ($cacheInfo['used_cache']) {
-            if ($cacheInfo['smart_cache_enabled']) {
-                $this->info('Using cached snapshot (validated by smart cache)');
-            } else {
-                $this->info('Using cached snapshot');
-            }
+            $this->info('Using cached snapshot' . ($cacheInfo['smart_cache_enabled'] ? ' (validated by smart cache)' : ''));
         } elseif ($cacheInfo['cache_was_stale']) {
             $this->info('Downloaded fresh snapshot (cached copy was stale)');
         }

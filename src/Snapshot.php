@@ -3,9 +3,12 @@
 namespace ZiffMedia\LaravelMysqlSnapshots;
 
 use Carbon\Carbon;
+use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasOutputCallbacks;
 
 class Snapshot
 {
+    use HasOutputCallbacks;
+
     protected ?int $size = null;
 
     public function __construct(
@@ -42,57 +45,6 @@ class Snapshot
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
-    protected function shouldRefreshCache(): bool
-    {
-        if (!$this->existsLocally()) {
-            return true; // No local copy, must download
-        }
-
-        // Check if there's a newer snapshot available by comparing filename dates
-        $newestSnapshot = $this->snapshotPlan->snapshots->first();
-
-        if (!$newestSnapshot) {
-            return false; // No newer snapshot available
-        }
-
-        // Refresh if the newest available snapshot is newer than the current one
-        return $newestSnapshot->date->gt($this->date);
-    }
-
-    protected function downloadWithProgress(callable $progressCallback): void
-    {
-        $archivePath = "{$this->snapshotPlan->archivePath}/{$this->fileName}";
-        $localPath = "{$this->snapshotPlan->localPath}/{$this->fileName}";
-
-        // Get total size for progress calculation
-        $totalSize = $this->snapshotPlan->archiveDisk->size($archivePath);
-
-        // Open streams
-        $sourceStream = $this->snapshotPlan->archiveDisk->readStream($archivePath);
-
-        if (!$this->snapshotPlan->localDisk->exists($this->snapshotPlan->localPath)) {
-            $this->snapshotPlan->localDisk->makeDirectory($this->snapshotPlan->localPath);
-        }
-
-        $destPath = $this->snapshotPlan->localDisk->path($localPath);
-        $destStream = fopen($destPath, 'w');
-
-        $downloaded = 0;
-        $bufferSize = 8192; // 8KB chunks
-
-        while (!feof($sourceStream)) {
-            $buffer = fread($sourceStream, $bufferSize);
-            fwrite($destStream, $buffer);
-            $downloaded += strlen($buffer);
-
-            // Call progress callback with current progress
-            $progressCallback($downloaded, $totalSize);
-        }
-
-        fclose($sourceStream);
-        fclose($destStream);
-    }
-
     public function removeLocalCopy(): void
     {
         if (!$this->existsLocally()) {
@@ -102,7 +54,7 @@ class Snapshot
         $this->snapshotPlan->localDisk->delete("{$this->snapshotPlan->localPath}/{$this->fileName}");
     }
 
-    public function download($useLocalCopy = false, $progressCallback = null): array
+    public function download($useLocalCopy = false): array
     {
         $smartCache = config('mysql-snapshots.cache_by_default', false);
         $hadCachedCopy = $this->existsLocally();
@@ -132,8 +84,37 @@ class Snapshot
         }
 
         // Download with or without progress tracking
-        if ($progressCallback) {
-            $this->downloadWithProgress($progressCallback);
+        if ($this->progressCallback) {
+            $archivePath = "{$this->snapshotPlan->archivePath}/{$this->fileName}";
+            $localPath = "{$this->snapshotPlan->localPath}/{$this->fileName}";
+
+            // Get total size for progress calculation
+            $totalSize = $this->snapshotPlan->archiveDisk->size($archivePath);
+
+            // Open streams
+            $sourceStream = $this->snapshotPlan->archiveDisk->readStream($archivePath);
+
+            if (!$this->snapshotPlan->localDisk->exists($this->snapshotPlan->localPath)) {
+                $this->snapshotPlan->localDisk->makeDirectory($this->snapshotPlan->localPath);
+            }
+
+            $destPath = $this->snapshotPlan->localDisk->path($localPath);
+            $destStream = fopen($destPath, 'w');
+
+            $downloaded = 0;
+            $bufferSize = 8192; // 8KB chunks
+
+            while (!feof($sourceStream)) {
+                $buffer = fread($sourceStream, $bufferSize);
+                fwrite($destStream, $buffer);
+                $downloaded += strlen($buffer);
+
+                // Call progress callback with current progress
+                $this->callProgress($downloaded, $totalSize);
+            }
+
+            fclose($sourceStream);
+            fclose($destStream);
         } else {
             $this->snapshotPlan->localDisk->put(
                 "{$this->snapshotPlan->localPath}/{$this->fileName}",
@@ -148,9 +129,9 @@ class Snapshot
         ];
     }
 
-    public function load($useLocalCopy = false, $keepLocalCopy = false, $progressCallback = null): array
+    public function load($useLocalCopy = false, $keepLocalCopy = false): array
     {
-        $downloadInfo = $this->download($useLocalCopy, $progressCallback);
+        $downloadInfo = $this->download($useLocalCopy);
 
         $cacheInfo = [
             'downloaded'          => $downloadInfo['downloaded'],
@@ -185,5 +166,22 @@ class Snapshot
         }
 
         return $this->snapshotPlan->archiveDisk->delete("{$this->snapshotPlan->archivePath}/{$this->fileName}");
+    }
+
+    protected function shouldRefreshCache(): bool
+    {
+        if (!$this->existsLocally()) {
+            return true; // No local copy, must download
+        }
+
+        // Check if there's a newer snapshot available by comparing filename dates
+        $newestSnapshot = $this->snapshotPlan->snapshots->first();
+
+        if (!$newestSnapshot) {
+            return false; // No newer snapshot available
+        }
+
+        // Refresh if the newest available snapshot is newer than the current one
+        return $newestSnapshot->date->gt($this->date);
     }
 }
