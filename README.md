@@ -618,6 +618,27 @@ protected function schedule(Schedule $schedule)
 0 2 * * * cd /path/to/app && php artisan mysql-snapshots:create daily --cleanup
 ```
 
+## Debugging & Verbosity
+
+All commands support Laravel's standard verbosity flags to display additional debugging information:
+
+```bash
+# Verbose output - shows detailed operation information
+php artisan mysql-snapshots:load daily -v
+
+# Very verbose - shows command execution details
+php artisan mysql-snapshots:load daily -vv
+
+# Debug output - shows all internal operations
+php artisan mysql-snapshots:load daily -vvv
+```
+
+Use verbose flags when troubleshooting issues like:
+- Failed snapshot loads or creates
+- Slow downloads or connection problems
+- Post-load SQL commands not executing as expected
+- Cache behavior issues
+
 ## Testing
 
 Run the test suite:
