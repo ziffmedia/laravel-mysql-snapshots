@@ -256,6 +256,7 @@ class SnapshotPlan
             $this->callMessaging('Running: ' . $command);
 
             $process = Process::fromShellCommandline($command);
+            $process->setTimeout(null); // No timeout for gzip operations
             $process->run();
 
             if (!$process->isSuccessful()) {
@@ -465,6 +466,7 @@ class SnapshotPlan
         $this->callMessaging('Running: ' . $command);
 
         $process = Process::fromShellCommandline($command);
+        $process->setTimeout(null); // No timeout for database operations
         $process->run();
 
         $this->callMessaging('Deleted MySQL credentials file');
