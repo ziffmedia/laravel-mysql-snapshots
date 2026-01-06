@@ -40,6 +40,7 @@ class LoadCommand extends Command
             $cacheByDefault = config('mysql-snapshots.cache_by_default', false);
             $useLocalCopy = $cached && !$recached;
             $keepLocalCopy = $cached || $recached || $cacheByDefault;
+            $forceDownload = $recached;
             $skipPostCommands = $this->option('skip-post-commands');
 
             $noDrop = $this->option('no-drop');
@@ -56,7 +57,8 @@ class LoadCommand extends Command
             $results = $planGroup->loadAll(
                 $useLocalCopy,
                 $keepLocalCopy,
-                $skipPostCommands
+                $skipPostCommands,
+                $forceDownload
             );
 
             // Execute plan group post-load commands
@@ -145,6 +147,7 @@ class LoadCommand extends Command
 
         $useLocalCopy = $cached && !$recached;
         $keepLocalCopy = $cached || $recached || $cacheByDefault;
+        $forceDownload = $recached;
 
         $noDrop = $this->option('no-drop');
 
@@ -172,7 +175,7 @@ class LoadCommand extends Command
             $snapshotPlan->displayMessagesUsing(fn ($message) => $this->line($message));
         }
 
-        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy);
+        $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy, $forceDownload);
 
         if ($progressBar) {
             $progressBar->finish();

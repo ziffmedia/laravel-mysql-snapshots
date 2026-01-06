@@ -54,23 +54,25 @@ class Snapshot
         $this->snapshotPlan->localDisk->delete("{$this->snapshotPlan->localPath}/{$this->fileName}");
     }
 
-    public function download($useLocalCopy = false): array
+    public function download($useLocalCopy = false, $forceDownload = false): array
     {
         $smartCache = config('mysql-snapshots.cache_by_default', false);
         $hadCachedCopy = $this->existsLocally();
         $cacheWasStale = false;
 
-        // Honor explicit useLocalCopy flag first
-        if ($useLocalCopy && $this->existsLocally() && !$this->shouldRefreshCache()) {
+        // Force download bypasses all cache logic
+        if ($forceDownload && $this->existsLocally()) {
+            $this->removeLocalCopy();
+            $cacheWasStale = true;
+        } elseif ($useLocalCopy && $this->existsLocally() && !$this->shouldRefreshCache()) {
+            // Honor explicit useLocalCopy flag
             return [
                 'downloaded'      => false,
                 'cache_was_stale' => false,
                 'had_cached_copy' => true,
             ];
-        }
-
-        // Smart cache: check if we need to refresh
-        if ($smartCache && !$useLocalCopy && $this->existsLocally()) {
+        } elseif ($smartCache && !$useLocalCopy && $this->existsLocally()) {
+            // Smart cache: check if we need to refresh
             if (!$this->shouldRefreshCache()) {
                 return [
                     'downloaded'      => false,
@@ -129,9 +131,9 @@ class Snapshot
         ];
     }
 
-    public function load($useLocalCopy = false, $keepLocalCopy = false): array
+    public function load($useLocalCopy = false, $keepLocalCopy = false, $forceDownload = false): array
     {
-        $downloadInfo = $this->download($useLocalCopy);
+        $downloadInfo = $this->download($useLocalCopy, $forceDownload);
 
         $cacheInfo = [
             'downloaded'          => $downloadInfo['downloaded'],

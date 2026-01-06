@@ -109,7 +109,8 @@ class PlanGroup
     public function loadAll(
         bool $useLocalCopy = false,
         bool $keepLocalCopy = false,
-        bool $skipPostCommands = false
+        bool $skipPostCommands = false,
+        bool $forceDownload = false
     ): Collection {
         $results = collect();
 
@@ -148,7 +149,7 @@ class PlanGroup
                 $snapshot->displayMessagesUsing($this->messagingCallback ?? fn () => null);
                 $snapshot->displayProgressUsing($this->progressCallback ?? fn () => null);
 
-                $snapshot->load($useLocalCopy, $keepLocalCopy);
+                $snapshot->load($useLocalCopy, $keepLocalCopy, $forceDownload);
 
                 if (!$skipPostCommands) {
                     $plan->executePostLoadCommands();

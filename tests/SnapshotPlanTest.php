@@ -364,6 +364,60 @@ class SnapshotPlanTest extends TestCase
         $this->assertFalse($localDisk->exists("{$localPath}/{$fileName}"), 'Partial SQL file should be cleaned up after mysqldump failure');
     }
 
+    public function test_recached_flag_forces_download_even_with_same_date()
+    {
+        // Enable smart caching
+        config()->set('mysql-snapshots.cache_by_default', true);
+
+        $archiveDisk = Storage::disk(config('mysql-snapshots.filesystem.archive_disk'));
+        $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
+        $archivePath = config('mysql-snapshots.filesystem.archive_path');
+        $localPath = config('mysql-snapshots.filesystem.local_path');
+
+        // Create a snapshot file on archive with specific content
+        $fileName = 'mysql-snapshot-daily-20240913.sql.gz';
+        $originalContent = 'original snapshot content';
+        $archiveDisk->put($archivePath . '/' . $fileName, $originalContent);
+
+        // Simulate a cached copy with different content (simulating old/corrupt file)
+        $localDisk->makeDirectory($localPath);
+        $cachedContent = 'old cached content';
+        $localDisk->put($localPath . '/' . $fileName, $cachedContent);
+
+        // Configure plan
+        config()->set('mysql-snapshots.plans', [
+            'daily' => $this->defaultDailyConfig(),
+        ]);
+
+        // Load plans and get snapshot
+        $plans = SnapshotPlan::all();
+        $dailyPlan = $plans->firstWhere('name', 'daily');
+        $snapshot = $dailyPlan->snapshots->firstWhere('fileName', $fileName);
+
+        $this->assertNotNull($snapshot, 'Snapshot should exist');
+
+        // Verify cached file exists with old content
+        $this->assertTrue($localDisk->exists($localPath . '/' . $fileName));
+        $this->assertEquals($cachedContent, $localDisk->get($localPath . '/' . $fileName));
+
+        // Simulate --recached behavior: useLocalCopy=false, forceDownload=true
+        // This should FORCE download even though the dates are the same
+        $downloadInfo = $snapshot->download($useLocalCopy = false, $forceDownload = true);
+
+        // Assert that it downloaded
+        $this->assertTrue(
+            $downloadInfo['downloaded'],
+            'Should force download when --recached is used, even with same date'
+        );
+
+        // Verify the local file now has the new content from archive
+        $this->assertEquals(
+            $originalContent,
+            $localDisk->get($localPath . '/' . $fileName),
+            'Local cached file should be updated with fresh content from archive'
+        );
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [
