@@ -2,7 +2,6 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots\Tests;
 
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Orchestra\Testbench\TestCase;
@@ -321,23 +320,14 @@ class SnapshotPlanTest extends TestCase
 
     public function test_gzip_failure_cleans_up_partial_files()
     {
+        // Temporarily configure gzip to use the failure script
+        config()->set('mysql-snapshots.utilities.gzip', __DIR__ . '/fixtures/fakegzip-failure');
+
         $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
         $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
         $localPath = config('mysql-snapshots.filesystem.local_path');
         $fileName = 'mysql-snapshot-daily-' . date('Ymd') . '.sql';
-
-        // Mock Process facade to let mysqldump succeed but make gzip fail
-        Process::fake([
-            // Match mysqldump command - let it succeed
-            '*mysqldump*' => Process::result(exitCode: 0),
-            // Match gzip command - make it fail
-            '*gzip*' => Process::result(
-                output: '',
-                errorOutput: 'gzip: simulated failure',
-                exitCode: 1
-            ),
-        ]);
 
         try {
             $snapshotPlan->create();
@@ -354,20 +344,14 @@ class SnapshotPlanTest extends TestCase
 
     public function test_mysqldump_failure_cleans_up_partial_file()
     {
+        // Temporarily configure mysqldump to use the failure script
+        config()->set('mysql-snapshots.utilities.mysqldump', __DIR__ . '/fixtures/fakemysqldump-failure');
+
         $snapshotPlan = new SnapshotPlan('daily', $this->defaultDailyConfig());
 
         $localDisk = Storage::disk(config('mysql-snapshots.filesystem.local_disk'));
         $localPath = config('mysql-snapshots.filesystem.local_path');
         $fileName = 'mysql-snapshot-daily-' . date('Ymd') . '.sql';
-
-        // Mock Process facade to make mysqldump fail
-        Process::fake([
-            '*mysqldump*' => Process::result(
-                output: '',
-                errorOutput: 'mysqldump: simulated connection failure',
-                exitCode: 1
-            ),
-        ]);
 
         try {
             $snapshotPlan->create();

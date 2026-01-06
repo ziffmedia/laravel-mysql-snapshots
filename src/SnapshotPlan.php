@@ -7,11 +7,11 @@ use Exception;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use ZiffMedia\LaravelMysqlSnapshots\Commands\Concerns\HasOutputCallbacks;
 
 class SnapshotPlan
@@ -255,13 +255,14 @@ class SnapshotPlan
 
             $this->callMessaging('Running: ' . $command);
 
-            $result = Process::run($command);
+            $process = Process::fromShellCommandline($command);
+            $process->run();
 
-            if ($result->failed()) {
+            if (!$process->isSuccessful()) {
                 $this->localDisk->delete("{$this->localPath}/{$fileName}");
                 $this->localDisk->delete("{$this->localPath}/{$fileName}.gz");
 
-                throw new RuntimeException('gzip command failed: ' . ($result->errorOutput() ?: $result->output() ?: 'Unknown error'));
+                throw new RuntimeException('gzip command failed: ' . ($process->getErrorOutput() ?: $process->getOutput() ?: 'Unknown error'));
             }
 
             // tack on .gz as that is what the above command does
@@ -463,14 +464,15 @@ class SnapshotPlan
 
         $this->callMessaging('Running: ' . $command);
 
-        $result = Process::run($command);
+        $process = Process::fromShellCommandline($command);
+        $process->run();
 
         $this->callMessaging('Deleted MySQL credentials file');
 
         $disk->delete('mysql-credentials.txt');
 
-        if ($result->failed()) {
-            throw new RuntimeException('Command failed: ' . ($result->errorOutput() ?: $result->output() ?: 'Unknown error'));
+        if (!$process->isSuccessful()) {
+            throw new RuntimeException('Command failed: ' . ($process->getErrorOutput() ?: $process->getOutput() ?: 'Unknown error'));
         }
     }
 

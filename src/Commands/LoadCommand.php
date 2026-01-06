@@ -49,7 +49,9 @@ class LoadCommand extends Command
                 $planGroup->dropTables();
             }
 
-            $planGroup->displayMessagesUsing(fn ($message) => $this->line($message));
+            if ($this->getOutput()->isVerbose()) {
+                $planGroup->displayMessagesUsing(fn ($message) => $this->line($message));
+            }
 
             $results = $planGroup->loadAll(
                 $useLocalCopy,
@@ -80,6 +82,7 @@ class LoadCommand extends Command
 
             $this->newLine();
             $this->info('Load Summary:');
+
             $this->table(
                 ['Plan', 'Status', 'Details'],
                 $results->map(function ($result) {
@@ -165,7 +168,9 @@ class LoadCommand extends Command
             });
         }
 
-        $snapshotPlan->displayMessagesUsing(fn ($message) => $this->line($message));
+        if ($this->getOutput()->isVerbose()) {
+            $snapshotPlan->displayMessagesUsing(fn ($message) => $this->line($message));
+        }
 
         $cacheInfo = $snapshot->load($useLocalCopy, $keepLocalCopy);
 

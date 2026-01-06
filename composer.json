@@ -10,7 +10,8 @@
         }
     ],
     "require": {
-        "php": ">=8.2"
+        "php": ">=8.2",
+        "symfony/process": "^5.4|^6.0|^7.0"
     },
     "require-dev": {
         "laravel/pint": "^v1.26",
