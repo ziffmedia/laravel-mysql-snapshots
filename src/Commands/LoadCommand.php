@@ -61,6 +61,18 @@ class LoadCommand extends Command
                 $forceDownload
             );
 
+            // Clear old cached files for each successfully loaded plan
+            $allClearedFiles = [];
+            foreach ($results as $result) {
+                if ($result['success']) {
+                    $plan = $planGroup->plans->firstWhere('name', $result['plan']);
+                    if ($plan) {
+                        $clearedFiles = $plan->clearCached($keepLocalCopy ? ($result['snapshot'] ?? null) : null);
+                        $allClearedFiles = array_merge($allClearedFiles, $clearedFiles);
+                    }
+                }
+            }
+
             // Execute plan group post-load commands
             if (!$skipPostCommands) {
                 $this->newLine();
@@ -97,6 +109,15 @@ class LoadCommand extends Command
                     ];
                 })
             );
+
+            if ($allClearedFiles) {
+                $this->newLine();
+                $this->info('Files cleared:');
+
+                foreach ($allClearedFiles as $clearedFile) {
+                    $this->line("  $clearedFile");
+                }
+            }
 
             $this->warnAboutUnacceptedFiles();
 
