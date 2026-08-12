@@ -61,7 +61,7 @@ class SnapshotPlan
         $snapshotPlanConfigs = config('mysql-snapshots.plans', []);
 
         if (count($snapshotPlanConfigs) === 0) {
-            throw new \RuntimeException('mysql-snapshots.plans does not contain any configured snapshot plans');
+            throw new RuntimeException('mysql-snapshots.plans does not contain any configured snapshot plans');
         }
 
         if (isset($snapshotPlanConfigs['cached'])) {

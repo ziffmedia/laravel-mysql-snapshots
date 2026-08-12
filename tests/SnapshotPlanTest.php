@@ -2,6 +2,7 @@
 
 namespace ZiffMedia\LaravelMysqlSnapshots\Tests;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Orchestra\Testbench\TestCase;
@@ -226,7 +227,7 @@ class SnapshotPlanTest extends TestCase
 
         // Test that matchFileAndDate can parse the filename correctly
         $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
-        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+        $this->assertInstanceOf(Carbon::class, $parsedDate);
         $this->assertEquals(date('YmdH'), $parsedDate->format('YmdH'));
     }
 
@@ -244,7 +245,7 @@ class SnapshotPlanTest extends TestCase
 
         // Test parsing
         $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
-        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+        $this->assertInstanceOf(Carbon::class, $parsedDate);
         $this->assertEquals(date('YmdHi'), $parsedDate->format('YmdHi'));
     }
 
@@ -303,7 +304,7 @@ class SnapshotPlanTest extends TestCase
 
         // Test that matchFileAndDate can parse the filename correctly
         $parsedDate = $snapshotPlan->matchFileAndDate($snapshot->fileName);
-        $this->assertInstanceOf(\Carbon\Carbon::class, $parsedDate);
+        $this->assertInstanceOf(Carbon::class, $parsedDate);
 
         // Use the snapshot's date property to verify parsing
         $expectedFormat = $snapshot->date->format('Ymd-His');
