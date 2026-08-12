@@ -15,8 +15,8 @@
     },
     "require-dev": {
         "laravel/pint": "^v1.26",
-        "orchestra/testbench": "^10.0",
-        "phpunit/phpunit": "^11.0",
+        "orchestra/testbench": "^10.0|^11.0",
+        "phpunit/phpunit": "^11.0|^12.0",
         "staabm/annotate-pull-request-from-checkstyle": "^1.8",
         "mheap/phpunit-github-actions-printer": "^1.5"
     },
