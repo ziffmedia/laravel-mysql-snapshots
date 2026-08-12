@@ -10,8 +10,15 @@ jobs:
 
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php-versions: [ '8.2', '8.4' ]
+        include:
+          # symfony/process 8.x requires PHP >= 8.4, so the lowest supported PHP
+          # exercises 7.x and the highest exercises 8.x
+          - php-versions: '8.2'
+            symfony-process: '7'
+          - php-versions: '8.4'
+            symfony-process: '8'
 
     steps:
       - uses: actions/checkout@v4
@@ -21,18 +28,25 @@ jobs:
         with:
           php-version: ${{ matrix.php-versions }}
 
-      - name: Cache Composer packages
-        id: composer-cache
+      - name: Cache Composer downloads
         uses: actions/cache@v4
         with:
-          path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          path: ~/.cache/composer
+          key: ${{ runner.os }}-php${{ matrix.php-versions }}-composer-${{ hashFiles('composer.json') }}
           restore-keys: |
-            ${{ runner.os }}-php-
+            ${{ runner.os }}-php${{ matrix.php-versions }}-composer-
 
+      # composer update, not install: the committed lock pins one dependency set,
+      # which would give both matrix legs the same symfony/process
       - name: Install dependencies
-        if: steps.composer-cache.outputs.cache-hit != 'true'
-        run: composer install --prefer-dist --no-progress
+        run: composer update --prefer-dist --no-progress
+
+      - name: Verify resolved symfony/process
+        run: |
+          version=$(php -r 'require "vendor/autoload.php"; echo ltrim(Composer\InstalledVersions::getPrettyVersion("symfony/process"), "v");')
+          echo "Resolved symfony/process $version (expected ${{ matrix.symfony-process }}.x)"
+          [ "${version%%.*}" = '${{ matrix.symfony-process }}' ] \
+            || { echo "::error::expected symfony/process ${{ matrix.symfony-process }}.x, got $version"; exit 1; }
 
       - name: Run phpunit
         id: phpunit
