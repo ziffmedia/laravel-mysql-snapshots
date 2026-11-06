@@ -128,6 +128,47 @@ class PlanGroupTest extends TestCase
         $this->assertInstanceOf(PlanGroup::class, $planGroups->first());
     }
 
+    public function test_plans_locked_for_load_lists_plans_that_cannot_load()
+    {
+        $this->configureMixedLockGroup();
+
+        $planGroup = PlanGroup::find('mixed-group');
+
+        $this->assertEquals(['locked'], $planGroup->plansLockedForLoad()->pluck('name')->all());
+    }
+
+    public function test_load_command_refuses_plan_group_before_dropping_tables()
+    {
+        $this->configureMixedLockGroup();
+
+        // No usable mysql connection exists in tests, so reaching dropTables() would throw
+        $this->artisan('mysql-snapshots:load', ['plan' => 'mixed-group'])
+            ->expectsOutputToContain('Environment lock applies to: locked')
+            ->assertExitCode(1);
+    }
+
+    protected function configureMixedLockGroup(): void
+    {
+        config()->set('mysql-snapshots.plans', [
+            'open'   => array_merge($this->defaultDailyConfig(), [
+                'environment_locks' => ['create' => 'production', 'load' => 'testing'],
+            ]),
+            'locked' => array_merge($this->defaultDailyConfig(), [
+                'file_template'     => 'mysql-snapshot-locked-{date|Ymd}',
+                'environment_locks' => ['create' => 'production', 'load' => 'production'],
+            ]),
+        ]);
+
+        config()->set('mysql-snapshots.plan_groups', [
+            'mixed-group' => ['plans' => ['open', 'locked']],
+        ]);
+    }
+
+    protected function getPackageProviders($app)
+    {
+        return [\ZiffMedia\LaravelMysqlSnapshots\MysqlSnapshotsServiceProvider::class];
+    }
+
     protected function defaultDailyConfig(): array
     {
         return [

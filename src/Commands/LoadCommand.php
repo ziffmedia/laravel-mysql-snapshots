@@ -32,6 +32,17 @@ class LoadCommand extends Command
         $planGroup = $plan ? PlanGroup::find($plan) : null;
 
         if ($planGroup) {
+            $lockedPlans = $planGroup->plansLockedForLoad();
+
+            if ($lockedPlans->isNotEmpty()) {
+                $this->error(
+                    'Cannot load plan group in this environment (' . app()->environment() . '). '
+                    . 'Environment lock applies to: ' . $lockedPlans->pluck('name')->implode(', ')
+                );
+
+                return 1;
+            }
+
             $this->info("Loading all plans in plan group: {$planGroup->name}");
             $this->newLine();
 
