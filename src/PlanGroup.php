@@ -217,6 +217,18 @@ class PlanGroup
     }
 
     /**
+     * Plans in this group that cannot be loaded in the current environment
+     *
+     * @return Collection<SnapshotPlan>
+     */
+    public function plansLockedForLoad(): Collection
+    {
+        return $this->plans
+            ->reject(fn (SnapshotPlan $plan) => $plan->canLoad())
+            ->values();
+    }
+
+    /**
      * Drop tables on all unique database connections used by plans in this group
      */
     public function dropTables(): void
