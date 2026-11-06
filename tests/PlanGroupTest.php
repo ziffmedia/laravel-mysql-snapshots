@@ -4,6 +4,7 @@ namespace ZiffMedia\LaravelMysqlSnapshots\Tests;
 
 use Illuminate\Support\Facades\Storage;
 use Orchestra\Testbench\TestCase;
+use ZiffMedia\LaravelMysqlSnapshots\MysqlSnapshotsServiceProvider;
 use ZiffMedia\LaravelMysqlSnapshots\PlanGroup;
 use ZiffMedia\LaravelMysqlSnapshots\SnapshotPlan;
 
@@ -166,7 +167,7 @@ class PlanGroupTest extends TestCase
 
     protected function getPackageProviders($app)
     {
-        return [\ZiffMedia\LaravelMysqlSnapshots\MysqlSnapshotsServiceProvider::class];
+        return [MysqlSnapshotsServiceProvider::class];
     }
 
     protected function defaultDailyConfig(): array
